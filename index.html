@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache,no-store,must-revalidate">
+<title>Control General de Rendimientos | PVT</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{min-height:100%;font-family:'Inter',system-ui,sans-serif;background:#07100a;color:#e0ead0;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-thumb{background:rgba(74,222,128,0.25);border-radius:3px;}
+input[type=number]::-webkit-inner-spin-button{opacity:1;}
+@keyframes fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.fade{animation:fadein .25s ease both;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+var useState=React.useState;
+var useEffect=React.useEffect;
+var useMemo=React.useMemo;
+
+var FB="https://parrasvalley-default-rtdb.firebaseio.com";
+var PIN="1986";
+var CULTIVOS=["Persa","Slicer","Europeo","Morron","Minibel"];
+var CCOLORES=["#22c55e","#38bdf8","#f59e0b","#a78bfa","#f43f5e","#06b6d4"];
+
+var PESOS={"20lb":9.25,"20 lb":9.25,"8x2":7.60,"12x1":5.70,"12x1lb":5.76,
+  "12x8oz":2.88,"18lb":8.16,"18 lb":8.16,"25lb":11.34,"50lb":22.68,
+  "Bushel":27.0,"1/9 bushel":9.07,"RPC 35lb":15.87,"Verde RPC":13.61,
+  "L":5.13,"XL":5.13,"Jumbo":5.13,"8x6":5.44,"12x2":5.44};
+var PZ_CAJA={"18ct":18,"24ct":24,"36ct":36,"62ct":62,"12ct":12,"62 piezas":62};
+
+var CAL_MAP={
+  Persa:{"Primera":"pri","Segunda":"seg","Tercera":"ter"},
+  Slicer:{"Superselecto":"sup","Super":"sup","Selecto":"sel","Large":"sel","Choice":"cho","Plain":"cho","Small":"cho"},
+  Europeo:{"Primera":"pri","Segunda":"seg","Tercera":"ter","Choice":"ter"},
+  Morron:{"Primera":"pri","Segunda":"pri","Choice":"cho","Tercera":"ter"},
+  Minibel:{"Primera":"pri","Segunda":"seg"}
+};
+var CAL_LABELS={
+  Persa:[{id:"pri",l:"1a Primera",c:"#22c55e"},{id:"seg",l:"2a Segunda",c:"#60a5fa"},{id:"ter",l:"3a Tercera",c:"#f59e0b"}],
+  Slicer:[{id:"sup",l:"Superselecto",c:"#22c55e"},{id:"sel",l:"Selecto",c:"#60a5fa"},{id:"cho",l:"Choice",c:"#f59e0b"}],
+  Europeo:[{id:"pri",l:"1a Primera",c:"#22c55e"},{id:"seg",l:"2a Segunda",c:"#60a5fa"},{id:"ter",l:"3a Tercera",c:"#f59e0b"}],
+  Morron:[{id:"pri",l:"1a Primera",c:"#22c55e"},{id:"cho",l:"Choice",c:"#60a5fa"},{id:"ter",l:"Tercera",c:"#f59e0b"}],
+  Minibel:[{id:"pri",l:"1a Primera",c:"#22c55e"},{id:"seg",l:"2a Segunda",c:"#60a5fa"}]
+};
+
+function r2(n){return Math.round((n||0)*100)/100;}
+function pct(a,b){return b>0?Math.round((a||0)/(b||1)*1000)/10:0;}
+function ni(v){var x=parseInt(v);return isNaN(x)?0:x;}
+function nf(v){var x=parseFloat(v);return isNaN(x)?0:x;}
+function hoy(){var d=new Date();var m=d.getMonth()+1;var dd=d.getDate();
+  return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(dd<10?"0":"")+dd;}
+function tsToISO(ts){if(!ts)return "";var d=new Date(ts);
+  var m=d.getMonth()+1;var dd=d.getDate();
+  return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(dd<10?"0":"")+dd;}
+function fbGet(k){return fetch(FB+"/"+k+".json").then(function(r){return r.json();}).catch(function(){return null;});}
+function fbPut(k,v){return fetch(FB+"/"+k+".json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(v)}).catch(function(){});}
+
+function App(){
+  var st=useState; // shorthand
+  var s1=st(hoy());    var fecha=s1[0];    var setFecha=s1[1];
+  var s2=st("Persa");  var cultivo=s2[0];  var setCultivo=s2[1];
+  var s3=st("cap");    var tab=s3[0];      var setTab=s3[1];
+  var s4=st(false);    var auth=s4[0];     var setAuth=s4[1];
+  var s5=st("");       var pin=s5[0];      var setPin=s5[1];
+  var s6=st(false);    var showPin=s6[0];  var setShowPin=s6[1];
+  var s7=st("");       var msg=s7[0];      var setMsg=s7[1];
+  var s8=st("");       var jalando=s8[0];  var setJalando=s8[1];
+  var s9=st(false);    var guard=s9[0];    var setGuard=s9[1];
+  var s10=st({});      var recibo=s10[0];  var setRecibo=s10[1];
+  var s11=st({});      var prod=s11[0];    var setProd=s11[1];
+  var s12=st({});      var hist=s12[0];    var setHist=s12[1];
+  var s13=st({});      var inputs=s13[0];  var setInputs=s13[1];
+
+  var cals=CAL_LABELS[cultivo]||[];
+  var calMap=CAL_MAP[cultivo]||{};
+
+  useEffect(function(){
+    fbGet("rendimientos-hist-v1").then(function(d){if(d&&typeof d==="object")setHist(d);});
+  },[]);
+
+  function flash(m){setMsg(m);setTimeout(function(){setMsg("");},5000);}
+  function getInp(r,k){var c=inputs[cultivo];if(!c)return "";var x=c[r];if(!x)return "";return x[k]||"";}
+  function setInp(r,k,v){
+    setInputs(function(p){
+      var n=JSON.parse(JSON.stringify(p));
+      if(!n[cultivo])n[cultivo]={};
+      if(!n[cultivo][r])n[cultivo][r]={};
+      n[cultivo][r][k]=v;return n;
+    });
+  }
+
+  function jalarRecibo(){
+    setJalando("rec");
+    Promise.all([fbGet("recibo-inv-v1"),fbGet("recibo-hist-v1")]).then(function(vals){
+      var inv=vals[0]; var hc=vals[1];
+      var cn=cultivo.toLowerCase(); var res={};
+      if(inv&&typeof inv==="object"){
+        var lin=inv[cn]||{};
+        var lts=lin.lotes||[];
+        if(!Array.isArray(lts))lts=Object.values(lts).filter(Boolean);
+        lts.forEach(function(l){
+          if(!l||!l.rancho)return;
+          if(tsToISO(l.ts)!==fecha)return;
+          if(!res[l.rancho])res[l.rancho]={rejas:0,malla:""};
+          res[l.rancho].rejas+=ni(l.cajas);
+          if(l.malla)res[l.rancho].malla=l.malla;
+        });
+      }
+      if(hc){
+        var arr=Array.isArray(hc)?hc:Object.values(hc).filter(Boolean);
+        arr.forEach(function(h){
+          if(!h||(h.lineaNombre||"").toLowerCase()!==cn)return;
+          var lts2=h.lotes||[];
+          if(!Array.isArray(lts2))lts2=Object.values(lts2).filter(Boolean);
+          lts2.forEach(function(l){
+            if(!l||!l.rancho)return;
+            if(tsToISO(l.ts)!==fecha)return;
+            if(!res[l.rancho])res[l.rancho]={rejas:0,malla:""};
+            res[l.rancho].rejas+=ni(l.cajas);
+            if(l.malla)res[l.rancho].malla=l.malla;
+          });
+        });
+      }
+      setRecibo(function(p){var n=JSON.parse(JSON.stringify(p));n[cultivo]=Object.assign({},n[cultivo]||{},res);return n;});
+      setJalando("");
+      var cnt=Object.keys(res).length;
+      flash(cnt>0?"Recibo: "+cnt+" rancho(s) · "+fecha:"Sin recibo para "+cultivo+" el "+fecha);
+    }).catch(function(){setJalando("");flash("Error al conectar con recibo");});
+  }
+
+  function jalarProd(){
+    setJalando("prod");
+    fbGet("produccion-v1").then(function(data){
+      if(!data){setJalando("");flash("Sin datos en produccion-v1");return;}
+      var po=data[cultivo];
+      if(!po){setJalando("");flash("Sin datos de "+cultivo);return;}
+      var toArr=function(x){if(!x)return[];if(Array.isArray(x))return x.filter(Boolean);return Object.values(x).filter(Boolean);};
+      var todos=toArr(po.inventario).concat(toArr(po.bajados)).concat(toArr(po.registros));
+      var excl=0;
+      var filtrados=todos.filter(function(r){
+        if(!r)return false;
+        var f=r.fecha||r.fechaInventario||"";
+        if(f!==fecha)return false;
+        // Excluir solo retroeso de dias anteriores
+        if((r.tipo||"")==="reproceso"){excl++;return false;}
+        return true;
+      });
+      var acum={};
+      var tiposV={};
+      filtrados.forEach(function(r){
+        var rancho=r.rancho||"SinRancho";
+        var calId=calMap[r.calidad]||null;
+        if(!calId)return;
+        var pres=r.presentacion||"";
+        if(!acum[rancho])acum[rancho]={malla:r.malla||""};
+        if(!acum[rancho][calId])acum[rancho][calId]={};
+        acum[rancho][calId][pres]=(ni(acum[rancho][calId][pres])||0)+ni(r.cajas);
+        var t=r.tipo||"(sin tipo)";tiposV[t]=(tiposV[t]||0)+1;
+      });
+      setProd(function(p){var n=JSON.parse(JSON.stringify(p));n[cultivo]=Object.assign({},n[cultivo]||{},acum);return n;});
+      setJalando("");
+      var pres2=[];
+      Object.values(acum).forEach(function(rc){Object.keys(rc).forEach(function(calId){if(calId==="malla")return;Object.keys(rc[calId]).forEach(function(p){if(pres2.indexOf(p)<0)pres2.push(p);});});});
+      var tiposStr=Object.keys(tiposV).map(function(t){return t+"("+tiposV[t]+")";}).join(", ");
+      flash("Prod "+fecha+": "+filtrados.length+" pallets fruta-dia ("+excl+" excluidos). Ranchos: "+Object.keys(acum).join(", ")+". Pres: "+pres2.join(", ")+". Tipos: "+tiposStr);
+    }).catch(function(){setJalando("");flash("Error al conectar con produccion");});
+  }
+
+  var calculos=useMemo(function(){
+    var recC=recibo[cultivo]||{};
+    var prC=prod[cultivo]||{};
+    var ranchos={};
+    Object.keys(recC).forEach(function(r){ranchos[r]=true;});
+    Object.keys(prC).forEach(function(r){if(r!=="malla")ranchos[r]=true;});
+    var res={};
+    Object.keys(ranchos).forEach(function(rancho){
+      var rec=recC[rancho]||{};
+      var pr=prC[rancho]||{};
+      var rejas=ni(rec.rejas)||0;
+      var pesoReja=nf(getInp(rancho,"pesoReja"))||0;
+      var piezasReja=nf(getInp(rancho,"piezasReja"))||0;
+      var kgRec=r2(rejas*pesoReja);
+      var pzRec=Math.round(rejas*piezasReja);
+      var pesoPieza=pzRec>0?kgRec/pzRec:0;
+      var detCal={};var kgEmpTotal=0;
+      cals.forEach(function(cal){
+        var presAcum=pr[cal.id]||{};
+        var kgC=0;var pzC=0;var desglose={};
+        Object.keys(presAcum).forEach(function(pres){
+          var cajas=ni(presAcum[pres]);
+          var kgP=0;var pzP=0;
+          if(PESOS[pres]){kgP=cajas*PESOS[pres];}
+          else if(PZ_CAJA[pres]){pzP=cajas*PZ_CAJA[pres];kgP=pzP*pesoPieza;}
+          kgC+=kgP;pzC+=pzP;
+          if(cajas>0)desglose[pres]={cajas:cajas,kg:r2(kgP),pz:pzP};
+        });
+        detCal[cal.id]={kg:r2(kgC),pz:pzC,desglose:desglose};
+        kgEmpTotal+=kgC;
+      });
+      kgEmpTotal=r2(kgEmpTotal);
+      var kgMerma=r2(kgRec-kgEmpTotal);
+      res[rancho]={malla:rec.malla||pr.malla||"",rejas:rejas,kgRec:kgRec,
+        kgEmp:kgEmpTotal,kgMerma:kgMerma,
+        pctMerma:pct(kgMerma,kgRec),
+        factorRend:kgRec>0?Math.round(kgEmpTotal/kgRec*1000)/10:0,
+        detCal:detCal};
+    });
+    return res;
+  },[recibo,prod,inputs,cultivo,fecha,cals,calMap]);
+
+  var totales=useMemo(function(){
+    var t={kgRec:0,kgEmp:0,kgMerma:0,detCal:{}};
+    cals.forEach(function(cal){t.detCal[cal.id]={kg:0,pct:0};});
+    Object.values(calculos).forEach(function(d){
+      t.kgRec+=d.kgRec;t.kgEmp+=d.kgEmp;t.kgMerma+=d.kgMerma;
+      cals.forEach(function(cal){t.detCal[cal.id].kg+=((d.detCal&&d.detCal[cal.id]&&d.detCal[cal.id].kg)||0);});
+    });
+    t.kgRec=r2(t.kgRec);t.kgEmp=r2(t.kgEmp);t.kgMerma=r2(t.kgMerma);
+    t.pctMerma=pct(t.kgMerma,t.kgRec);
+    cals.forEach(function(cal){t.detCal[cal.id].pct=pct(t.detCal[cal.id].kg,t.kgEmp);t.detCal[cal.id].kg=r2(t.detCal[cal.id].kg);});
+    return t;
+  },[calculos,cals]);
+
+  var hayData=Object.keys(calculos).some(function(r){return calculos[r].kgRec>0||calculos[r].kgEmp>0;});
+
+  function guardar(){
+    if(!auth){setShowPin(true);return;}
+    setGuard(true);
+    var entry={fecha:fecha,cultivo:cultivo,ts:Date.now(),totales:totales,ranchos:{}};
+    Object.keys(calculos).forEach(function(r){if(calculos[r].kgRec>0||calculos[r].kgEmp>0)entry.ranchos[r]=calculos[r];});
+    var key="rendimientos-hist-v1/"+fecha.replace(/-/g,"")+"/"+cultivo;
+    fbPut(key,entry).then(function(){
+      setHist(function(p){var n=JSON.parse(JSON.stringify(p));var dk=fecha.replace(/-/g,"");if(!n[dk])n[dk]={};n[dk][cultivo]=entry;return n;});
+      setGuard(false);flash("Guardado");
+    });
+  }
+
+  var th={padding:"6px 8px",textAlign:"right",fontSize:10,color:"#4a6a3a",fontWeight:700};
+  var td=function(extra){return Object.assign({padding:"7px 8px",textAlign:"right",verticalAlign:"middle",borderBottom:"1px solid rgba(255,255,255,0.05)"},extra||{});};
+  var INP={background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:6,padding:"5px 8px",color:"#e0ead0",fontSize:13,fontFamily:"'DM Mono',monospace",textAlign:"center",outline:"none"};
+  function Btn(p){return <button onClick={p.onClick} disabled={p.dis} style={{background:p.bg||"rgba(255,255,255,0.07)",border:"1px solid "+(p.bc||"rgba(255,255,255,0.12)"),borderRadius:8,padding:"8px 14px",color:p.col||"#e0ead0",fontWeight:700,fontSize:12,cursor:p.dis?"not-allowed":"pointer",opacity:p.dis?0.5:1}}>{p.children}</button>;}
+
+  var ranchosActivos=Object.keys(calculos).filter(function(r){return calculos[r].kgRec>0||calculos[r].kgEmp>0;});
+
+  return (
+    <div style={{minHeight:"100vh",background:"#07100a"}}>
+
+      {/* HEADER */}
+      <div style={{background:"linear-gradient(135deg,#051a09,#0a2e12)",padding:"12px 16px",borderBottom:"1px solid rgba(74,222,128,0.1)",position:"sticky",top:0,zIndex:10,boxShadow:"0 2px 10px rgba(0,0,0,0.5)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:8}}>
+          <div>
+            <div style={{fontSize:9,color:"#4a8a5a",fontWeight:700,letterSpacing:3,textTransform:"uppercase"}}>Parras Valley Tomatoes</div>
+            <div style={{fontSize:17,fontWeight:900,color:"#a8e063"}}>Control General de Rendimientos</div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <input type="date" value={fecha} onChange={function(e){setFecha(e.target.value);}} style={Object.assign({},INP,{width:"auto"})}/>
+            {auth?<span style={{fontSize:11,color:"#4ade80",fontWeight:700}}>Editor</span>
+              :<Btn onClick={function(){setShowPin(true);}} bg="rgba(74,222,128,0.08)" bc="rgba(74,222,128,0.2)" col="#4ade80">Editar</Btn>}
+          </div>
+        </div>
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {CULTIVOS.map(function(c){var on=cultivo===c;return(
+            <button key={c} onClick={function(){setCultivo(c);}} style={{padding:"4px 11px",borderRadius:6,border:"1px solid "+(on?"#4ade80":"rgba(255,255,255,0.08)"),background:on?"rgba(74,222,128,0.1)":"transparent",color:on?"#4ade80":"#6a7a5a",fontSize:12,fontWeight:700,cursor:"pointer"}}>{c}</button>
+          );})}
+          <div style={{flex:1}}/>
+          {["cap","evo"].map(function(t){var on=tab===t;var lbl=t==="cap"?"Captura":"Evolución";return(
+            <button key={t} onClick={function(){setTab(t);}} style={{padding:"4px 11px",borderRadius:6,border:"1px solid "+(on?"rgba(74,222,128,0.5)":"rgba(255,255,255,0.08)"),background:on?"rgba(74,222,128,0.08)":"transparent",color:on?"#4ade80":"#6a7a5a",fontSize:11,fontWeight:700,cursor:"pointer"}}>{lbl}</button>
+          );})}
+        </div>
+      </div>
+
+      {!!msg&&<div style={{background:"rgba(74,222,128,0.08)",borderBottom:"1px solid rgba(74,222,128,0.15)",padding:"7px 16px",fontSize:11,color:"#4ade80",fontWeight:600}}>{msg}</div>}
+
+      {/* PIN */}
+      {showPin&&(
+        <div onClick={function(e){if(e.target===e.currentTarget)setShowPin(false);}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"#0f1f0a",border:"1px solid rgba(74,222,128,0.3)",borderRadius:12,padding:"26px 22px",minWidth:230,textAlign:"center"}}>
+            <div style={{fontWeight:800,color:"#a8e063",marginBottom:12,fontSize:14}}>Acceso Editor</div>
+            <input type="password" value={pin} onChange={function(e){setPin(e.target.value);}}
+              onKeyDown={function(e){if(e.key==="Enter"&&pin===PIN){setAuth(true);setShowPin(false);setPin("");flash("Acceso concedido");}}}
+              placeholder="PIN" style={Object.assign({},INP,{width:"100%",fontSize:18,marginBottom:10,textAlign:"center"})}/>
+            <Btn onClick={function(){if(pin===PIN){setAuth(true);setShowPin(false);setPin("");flash("Acceso concedido");}else flash("PIN incorrecto");}} bg="rgba(74,222,128,0.12)" bc="rgba(74,222,128,0.3)" col="#4ade80">Entrar</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════ TAB CAPTURA ══════════ */}
+      {tab==="cap"&&(
+        <div style={{padding:"12px 12px 40px"}}>
+          {/* Botones jalar */}
+          <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+            <Btn onClick={jalarRecibo} dis={!!jalando} bg="rgba(234,179,8,0.08)" bc="rgba(234,179,8,0.25)" col="#fde047">{jalando==="rec"?"Jalando recibo...":"⬇ Jalar de Recibo"}</Btn>
+            <Btn onClick={jalarProd}  dis={!!jalando} bg="rgba(56,189,248,0.08)" bc="rgba(56,189,248,0.25)" col="#38bdf8">{jalando==="prod"?"Jalando produccion...":"⬇ Jalar de Produccion"}</Btn>
+            <div style={{flex:1}}/>
+            {hayData&&<Btn onClick={guardar} dis={guard} bg="rgba(74,222,128,0.1)" bc="rgba(74,222,128,0.3)" col="#4ade80">{guard?"Guardando...":"💾 Guardar dia"}</Btn>}
+          </div>
+
+          {/* Inputs peso */}
+          <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:8,padding:"10px 12px",marginBottom:12}}>
+            <div style={{fontSize:10,color:"#4a6a3a",fontWeight:700,letterSpacing:1.5,textTransform:"uppercase",marginBottom:8}}>Peso de recibo por rancho</div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {(Object.keys(recibo[cultivo]||{}).length>0?Object.keys(recibo[cultivo]||{}):["PVT","Cordillera","Forrajera"]).map(function(rancho){
+                var rec=(recibo[cultivo]||{})[rancho]||{};
+                return(
+                  <div key={rancho} style={{background:"rgba(255,255,255,0.03)",borderRadius:7,padding:"9px 11px",minWidth:170}}>
+                    <div style={{fontWeight:800,color:"#a8e063",fontSize:12,marginBottom:5}}>{rancho} {rec.malla&&<span style={{fontSize:10,color:"#4a6a3a"}}>M{rec.malla}</span>}</div>
+                    <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                      <div><div style={{fontSize:9,color:"#4a6a3a",marginBottom:2}}>Rejas</div><div style={{fontSize:16,fontWeight:900}}>{rec.rejas||"—"}</div></div>
+                      <div><div style={{fontSize:9,color:"#4a6a3a",marginBottom:2}}>Kg/reja</div><input type="number" min="0" step="0.1" placeholder="0.0" value={getInp(rancho,"pesoReja")} onChange={function(e){setInp(rancho,"pesoReja",e.target.value);}} style={Object.assign({},INP,{width:68})}/></div>
+                      <div><div style={{fontSize:9,color:"#4a6a3a",marginBottom:2}}>Pzas/reja</div><input type="number" min="0" placeholder="0" value={getInp(rancho,"piezasReja")} onChange={function(e){setInp(rancho,"piezasReja",e.target.value);}} style={Object.assign({},INP,{width:68})}/></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {!hayData&&(
+            <div style={{textAlign:"center",padding:"36px 0",color:"#2a3a2a",fontSize:13}}>
+              <div style={{fontSize:32,marginBottom:8}}>📊</div>
+              Jala recibo y produccion, luego ingresa el peso por reja
+            </div>
+          )}
+
+          {/* Layout 2 columnas */}
+          {hayData&&(
+            <div style={{display:"flex",gap:14,alignItems:"flex-start",flexWrap:"wrap"}}>
+
+              {/* IZQUIERDA: tarjeta por rancho */}
+              <div style={{flex:"0 0 auto",width:"min(480px,100%)"}}>
+                {ranchosActivos.map(function(rancho,ri){
+                  var d=calculos[rancho];
+                  var rc=CCOLORES[ri%CCOLORES.length];
+                  var prRaw=(prod[cultivo]||{})[rancho]||{};
+                  return(
+                    <div key={rancho} className="fade" style={{background:"rgba(255,255,255,0.025)",border:"1px solid "+rc+"44",borderLeft:"4px solid "+rc,borderRadius:8,marginBottom:10,overflow:"hidden"}}>
+                      <div style={{padding:"8px 13px",background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",gap:9,borderBottom:"1px solid "+rc+"33"}}>
+                        <span style={{fontWeight:900,color:rc,fontSize:16}}>{rancho}</span>
+                        {d.malla&&<span style={{fontSize:11,color:rc+"88",fontWeight:600}}>M{d.malla}</span>}
+                        <span style={{fontSize:11,color:"#6a7a5a"}}>{d.rejas} rejas · {d.kgRec} kg</span>
+                        <div style={{flex:1}}/>
+                        <span style={{fontSize:12,fontWeight:800,color:d.pctMerma>20?"#ef4444":d.pctMerma>12?"#f59e0b":"#4ade80"}}>Merma {d.pctMerma}%</span>
+                      </div>
+                      <div style={{height:5,display:"flex",background:"rgba(239,68,68,0.2)"}}>
+                        {cals.map(function(cal){var p=pct((d.detCal[cal.id]||{kg:0}).kg,d.kgRec);if(p<=0)return null;return <div key={cal.id} style={{width:p+"%",background:cal.c}}/>;})}</ div>
+                      <div style={{padding:"7px 10px"}}>
+                        {(function(){
+                          var pres=[];
+                          cals.forEach(function(cal){var pr=prRaw[cal.id]||{};Object.keys(pr).forEach(function(p){if(ni(pr[p])>0)pres.push(cal.l.split(" ")[0]+" "+p+"("+pr[p]+")");});});
+                          if(!pres.length)return null;
+                          return <div style={{fontSize:10,color:"#4a5a3a",marginBottom:5,padding:"2px 5px",background:"rgba(255,255,255,0.03)",borderRadius:3}}>Encontrado: {pres.join(" · ")}</div>;
+                        })()}
+                        <table style={{width:"100%",borderCollapse:"collapse"}}>
+                          <thead>
+                            <tr style={{borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
+                              <th style={{padding:"3px 4px",textAlign:"left",fontSize:10,color:"#4a6a3a",fontWeight:700}}>Calidad · Presentación</th>
+                              <th style={Object.assign({},th,{padding:"3px 4px"})}>Cajas</th>
+                              <th style={Object.assign({},th,{padding:"3px 4px"})}>Kg</th>
+                              <th style={Object.assign({},th,{padding:"3px 4px",color:"#a8e063"})}>Factor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cals.map(function(cal){
+                              var det=d.detCal[cal.id]||{kg:0,desglose:{}};
+                              var des=det.desglose||{};
+                              var pk=Object.keys(des).filter(function(k){return(des[k].cajas||0)>0;});
+                              if(!pk.length&&det.kg===0)return null;
+                              var factor=d.rejas>0&&det.kg>0?r2((det.kg/9.25)/d.rejas):0;
+                              var totCaj=pk.reduce(function(s,p){return s+(des[p].cajas||0);},0);
+                              return [
+                                pk.map(function(pres){var pd=des[pres];return(
+                                  <tr key={cal.id+"_"+pres} style={{borderBottom:"1px solid rgba(255,255,255,0.03)"}}>
+                                    <td style={{padding:"4px 4px 4px 10px",fontSize:13}}><span style={{color:cal.c,fontWeight:700,fontSize:11,marginRight:4}}>{cal.l.split(" ")[0]}</span>{pres}</td>
+                                    <td style={td({fontFamily:"'DM Mono',monospace",fontSize:15,fontWeight:700,color:"#e0ead0"})}>{pd.cajas}</td>
+                                    <td style={td({fontFamily:"'DM Mono',monospace",fontSize:14,color:"#b0c890"})}>{pd.kg}</td>
+                                    <td style={td({fontSize:11,color:"#3a4a2a"})}>—</td>
+                                  </tr>
+                                );}),
+                                <tr key={cal.id+"_T"} style={{background:"rgba(255,255,255,0.05)",borderTop:"1px solid rgba(255,255,255,0.12)"}}>
+                                  <td style={{padding:"5px 4px",fontWeight:900,color:cal.c,fontSize:14}}>Total {cal.l.split(" ")[0]}</td>
+                                  <td style={td({fontWeight:800,fontSize:15,fontFamily:"'DM Mono',monospace",color:"#e0ead0"})}>{totCaj}</td>
+                                  <td style={td({fontWeight:900,fontSize:16,fontFamily:"'DM Mono',monospace",color:cal.c})}>{det.kg}</td>
+                                  <td style={td({fontWeight:900,fontSize:15,fontFamily:"'DM Mono',monospace",color:"#a8e063"})}>{factor}</td>
+                                </tr>
+                              ];
+                            })}
+                            <tr style={{borderTop:"1px solid rgba(239,68,68,0.25)"}}>
+                              <td style={{padding:"6px 4px",fontWeight:700,color:"#ef4444",fontSize:14}}>Merma</td>
+                              <td style={td({color:"#4a5a3a",fontSize:12})}>—</td>
+                              <td style={td({fontWeight:900,fontSize:16,fontFamily:"'DM Mono',monospace",color:"#ef4444"})}>{d.kgMerma}</td>
+                              <td style={td({fontWeight:800,fontSize:14,color:d.pctMerma>20?"#ef4444":d.pctMerma>12?"#f59e0b":"#4ade80"})}>{d.pctMerma}%</td>
+                            </tr>
+                            <tr style={{borderTop:"1px solid rgba(74,222,128,0.2)",background:"rgba(74,222,128,0.04)"}}>
+                              <td style={{padding:"5px 4px",fontWeight:900,color:"#4ade80",fontSize:14}}>Empacado</td>
+                              <td style={td({fontSize:13,fontFamily:"'DM Mono',monospace",color:"#6a7a5a"})}>{cals.reduce(function(s,cal){var dt=d.detCal[cal.id]||{desglose:{}};return s+Object.keys(dt.desglose||{}).reduce(function(ss,p){return ss+(dt.desglose[p].cajas||0);},0);},0)}</td>
+                              <td style={td({fontWeight:900,fontSize:16,fontFamily:"'DM Mono',monospace",color:"#4ade80"})}>{d.kgEmp}</td>
+                              <td style={td({fontSize:11,color:"#3a4a2a"})}>—</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* DERECHA: comparativa screenshot */}
+              <div style={{flex:1,minWidth:260}}>
+                <div style={{background:"#0b1a0e",border:"1px solid rgba(74,222,128,0.2)",borderRadius:10,overflow:"hidden",maxWidth:400}}>
+                  {/* cabecera */}
+                  <div style={{background:"rgba(0,0,0,0.5)",padding:"10px 12px",borderBottom:"1px solid rgba(74,222,128,0.15)"}}>
+                    <div style={{fontSize:10,color:"#4a8a5a",fontWeight:700,letterSpacing:2,textTransform:"uppercase"}}>Parras Valley Tomatoes</div>
+                    <div style={{fontSize:15,fontWeight:900,color:"#a8e063",marginTop:2}}>Comparativa de Ranchos</div>
+                    <div style={{fontSize:11,color:"#4a6a3a",marginTop:1}}>{cultivo} · {fecha}</div>
+                  </div>
+                  <div style={{overflowX:"auto"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                      <thead>
+                        <tr style={{borderBottom:"1px solid rgba(255,255,255,0.08)"}}>
+                          <th style={{padding:"7px 8px",textAlign:"left",fontSize:10,color:"#4a6a3a",fontWeight:700,background:"rgba(0,0,0,0.3)"}}>Métrica</th>
+                          {ranchosActivos.map(function(r,ri){
+                            return <th key={r} style={{padding:"7px 8px",textAlign:"center",fontSize:13,fontWeight:900,color:CCOLORES[ri%CCOLORES.length],background:"rgba(0,0,0,0.3)"}}>{r}</th>;
+                          })}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* kg recibidos */}
+                        <tr style={{borderBottom:"1px solid rgba(255,255,255,0.05)",background:"rgba(255,255,255,0.02)"}}>
+                          <td style={{padding:"6px 8px",color:"#6a7a5a",fontSize:10,fontWeight:700}}>Kg recibidos</td>
+                          {ranchosActivos.map(function(r){return <td key={r} style={{padding:"6px 8px",textAlign:"center",fontWeight:700,fontSize:13,fontFamily:"'DM Mono',monospace",color:"#9ca3af"}}>{calculos[r].kgRec}</td>;})}
+                        </tr>
+                        {/* barras */}
+                        <tr style={{borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+                          <td style={{padding:"4px 8px",color:"#4a5a3a",fontSize:9}}>distribución</td>
+                          {ranchosActivos.map(function(r){
+                            var d=calculos[r];
+                            return(
+                              <td key={r} style={{padding:"4px 8px"}}>
+                                <div style={{height:18,borderRadius:3,overflow:"hidden",display:"flex",background:"rgba(239,68,68,0.2)"}}>
+                                  {cals.map(function(cal){var p=pct((d.detCal[cal.id]||{kg:0}).kg,d.kgRec);if(p<=0)return null;return(<div key={cal.id} style={{width:p+"%",background:cal.c,display:"flex",alignItems:"center",justifyContent:"center"}}>{p>10&&<span style={{fontSize:7,fontWeight:900,color:"#030e04"}}>{p}%</span>}</div>);})}{d.pctMerma>0&&<div style={{width:Math.min(d.pctMerma,100)+"%",background:"#ef4444",display:"flex",alignItems:"center",justifyContent:"center"}}>{d.pctMerma>10&&<span style={{fontSize:7,fontWeight:900,color:"#1a0000"}}>{d.pctMerma}%</span>}</div>}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        {/* por calidad */}
+                        {cals.map(function(cal){
+                          var any=ranchosActivos.some(function(r){return(calculos[r].detCal[cal.id]||{kg:0}).kg>0;});
+                          if(!any)return null;
+                          return(
+                            <tr key={cal.id} style={{borderBottom:"1px solid rgba(255,255,255,0.05)"}}>
+                              <td style={{padding:"7px 8px",fontWeight:700,color:cal.c,fontSize:11}}>{cal.l}</td>
+                              {ranchosActivos.map(function(r){
+                                var d=calculos[r];
+                                var det=d.detCal[cal.id]||{kg:0};
+                                var p=pct(det.kg,d.kgRec);
+                                var fac=d.rejas>0&&det.kg>0?r2((det.kg/9.25)/d.rejas):0;
+                                return(
+                                  <td key={r} style={{padding:"7px 8px",textAlign:"center"}}>
+                                    {det.kg>0?(
+                                      <div>
+                                        <div style={{fontSize:14,fontWeight:900,fontFamily:"'DM Mono',monospace",color:cal.c}}>{det.kg} kg</div>
+                                        <div style={{fontSize:10,color:"#6a7a5a"}}>{p}% · F:{fac}</div>
+                                      </div>
+                                    ):<span style={{color:"#2a3a2a"}}>—</span>}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          );
+                        })}
+                        {/* merma */}
+                        <tr style={{borderBottom:"1px solid rgba(239,68,68,0.15)",background:"rgba(239,68,68,0.04)"}}>
+                          <td style={{padding:"7px 8px",fontWeight:700,color:"#ef4444",fontSize:11}}>Merma</td>
+                          {ranchosActivos.map(function(r){
+                            var d=calculos[r];
+                            return(
+                              <td key={r} style={{padding:"7px 8px",textAlign:"center"}}>
+                                <div style={{fontSize:14,fontWeight:900,fontFamily:"'DM Mono',monospace",color:d.pctMerma>20?"#ef4444":d.pctMerma>12?"#f59e0b":"#4ade80"}}>{d.kgMerma} kg</div>
+                                <div style={{fontSize:13,fontWeight:800,color:d.pctMerma>20?"#ef4444":d.pctMerma>12?"#f59e0b":"#4ade80"}}>{d.pctMerma}%</div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                        {/* empacado */}
+                        <tr style={{background:"rgba(74,222,128,0.05)"}}>
+                          <td style={{padding:"7px 8px",fontWeight:700,color:"#4ade80",fontSize:11}}>Empacado</td>
+                          {ranchosActivos.map(function(r){
+                            var d=calculos[r];
+                            return(
+                              <td key={r} style={{padding:"7px 8px",textAlign:"center"}}>
+                                <div style={{fontSize:14,fontWeight:900,fontFamily:"'DM Mono',monospace",color:"#4ade80"}}>{d.kgEmp} kg</div>
+                                <div style={{fontSize:10,color:"#4a7a5a"}}>{d.factorRend}% del rec.</div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* leyenda */}
+                  <div style={{padding:"6px 10px",display:"flex",gap:8,flexWrap:"wrap",borderTop:"1px solid rgba(255,255,255,0.06)",background:"rgba(0,0,0,0.3)"}}>
+                    {cals.map(function(cal){return(
+                      <span key={cal.id} style={{display:"flex",alignItems:"center",gap:3,fontSize:9,color:cal.c,fontWeight:700}}>
+                        <span style={{width:7,height:7,borderRadius:2,background:cal.c,display:"inline-block"}}/>
+                        {cal.l}
+                      </span>
+                    );})}
+                    <span style={{display:"flex",alignItems:"center",gap:3,fontSize:9,color:"#ef4444",fontWeight:700}}><span style={{width:7,height:7,borderRadius:2,background:"#ef4444",display:"inline-block"}}/>Merma</span>
+                    <span style={{fontSize:9,color:"#3a4a2a",marginLeft:"auto"}}>F = cajas 20lb / reja</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══════════ TAB EVOLUCIÓN ══════════ */}
+      {tab==="evo"&&(
+        <div style={{padding:"12px 12px 40px"}}>
+          {(function(){
+            var diasKeys=Object.keys(hist).sort(function(a,b){return b>a?1:-1;}).slice(0,14);
+            var datosCult=diasKeys.map(function(dk){
+              var d=hist[dk];if(!d||!d[cultivo])return null;
+              var fec=d[cultivo].fecha||dk.slice(0,4)+"-"+dk.slice(4,6)+"-"+dk.slice(6,8);
+              return{fec:fec,tot:d[cultivo].totales,ranchos:d[cultivo].ranchos||{}};
+            }).filter(Boolean);
+            if(!datosCult.length)return <div style={{textAlign:"center",padding:"48px 0",color:"#2a3a2a",fontSize:13}}>Sin historial. Guarda los rendimientos desde Captura.</div>;
+            var maxK=Math.max.apply(null,datosCult.map(function(d){return d.tot?d.tot.kgRec:0;}))||1;
+            var ranchosHist=[];
+            datosCult.forEach(function(d){Object.keys(d.ranchos||{}).forEach(function(r){if(ranchosHist.indexOf(r)<0)ranchosHist.push(r);});});
+            return(
+              <div>
+                <div style={{fontSize:10,color:"#4a6a3a",fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:12}}>Evolución — {cultivo} — últimos {datosCult.length} días</div>
+                {/* merma % general */}
+                <div style={{background:"rgba(255,255,255,0.02)",border:"1px solid rgba(255,255,255,0.06)",borderRadius:8,padding:"11px",marginBottom:10}}>
+                  <div style={{fontSize:10,color:"#4a6a3a",fontWeight:700,marginBottom:10}}>% Merma total por día</div>
+                  <div style={{display:"flex",gap:5,alignItems:"flex-end",height:80}}>
+                    {datosCult.slice().reverse().map(function(d,i){
+                      var p=d.tot?d.tot.pctMerma:0;
+                      var col=p>20?"#ef4444":p>12?"#f59e0b":"#4ade80";
+                      return(<div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                        <span style={{fontSize:8,color:col,fontWeight:700}}>{p}%</span>
+                        <div style={{width:"80%",height:Math.max(p/35*70,2),background:col,borderRadius:"2px 2px 0 0",alignSelf:"flex-end"}}/>
+                        <span style={{fontSize:7,color:"#4a5a3a",whiteSpace:"nowrap"}}>{d.fec.slice(5)}</span>
+                      </div>);
+                    })}
+                  </div>
+                </div>
+                {/* por rancho */}
+                {ranchosHist.map(function(rancho,ri){
+                  var rc=CCOLORES[ri%CCOLORES.length];
+                  var datos=datosCult.map(function(d){
+                    var rd=d.ranchos[rancho];if(!rd)return null;
+                    return{fec:d.fec.slice(5),merma:rd.pctMerma||0,fac:rd.factorRend||0};
+                  }).filter(Boolean).reverse();
+                  if(datos.length<1)return null;
+                  return(
+                    <div key={rancho} style={{background:"rgba(255,255,255,0.02)",border:"1px solid "+rc+"33",borderLeft:"3px solid "+rc,borderRadius:8,padding:"11px",marginBottom:8}}>
+                      <div style={{fontSize:12,fontWeight:800,color:rc,marginBottom:8}}>{rancho} — merma %</div>
+                      <div style={{display:"flex",gap:4,alignItems:"flex-end",height:60}}>
+                        {datos.map(function(x,i){
+                          var col=x.merma>20?"#ef4444":x.merma>12?"#f59e0b":"#4ade80";
+                          var maxM=Math.max.apply(null,datos.map(function(d){return d.merma;}))||1;
+                          return(<div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                            <span style={{fontSize:8,color:col,fontWeight:700}}>{x.merma}%</span>
+                            <div style={{width:"80%",height:Math.max(x.merma/maxM*48,2),background:col,borderRadius:"2px 2px 0 0",alignSelf:"flex-end"}}/>
+                            <span style={{fontSize:7,color:"#4a5a3a",whiteSpace:"nowrap"}}>{x.fec}</span>
+                          </div>);
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
+}
+ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+</body>
+</html>
