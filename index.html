@@ -1,0 +1,2900 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Rendimientos | PVT</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+var BUILD="v2026-09-24-TRZ";
+// VIGIA DE VERSION
+// GitHub Pages deja el HTML guardado en la cache del navegador, y por eso solo
+// en incognito salia el codigo nuevo. Aqui se pide el propio archivo saltandose
+// la cache; si el BUILD de alla es otro, se recarga una sola vez.
+(function vigilaVersion(){
+  if(window.top!==window.self)return;
+  var yaRecargo=false;
+  function veces(){
+    try{return parseInt(sessionStorage.getItem("pv_rl_rend")||"0",10)||0;}catch(e){return 0;}
+  }
+  function checa(){
+    try{
+      fetch(location.pathname+"?v="+Date.now(),{cache:"no-store"})
+        .then(function(r){return r.text();})
+        .then(function(t){
+          var m=t.match(/var BUILD="([^"]+)"/);
+          if(!m||m[1]===BUILD)return;
+          if(yaRecargo||veces()>=2)return;
+          yaRecargo=true;
+          try{sessionStorage.setItem("pv_rl_rend",String(veces()+1));}catch(e){}
+          location.reload();
+        }).catch(function(){});
+    }catch(e){}
+  }
+  setTimeout(checa,3000);
+  setInterval(checa,300000);
+  document.addEventListener("visibilitychange",function(){if(!document.hidden)checa();});
+})();
+// El letrero de version de abajo a la derecha estaba escrito a mano en el HTML
+// y se quedo en v2026-08-08-N para siempre, aunque el archivo si se actualizara.
+// Ahora lo pinta la version real, la misma que compara el vigia.
+(function(){
+  function pinta(){var e=document.getElementById("verTag");if(e)e.textContent=BUILD;}
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",pinta);
+  else pinta();
+})();
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,sans-serif;background:#07100a;color:#e0ead0;min-height:100vh}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-thumb{background:rgba(74,222,128,.25);border-radius:3px}
+input[type=number]::-webkit-inner-spin-button{opacity:1}
+@keyframes fi{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+.fi{animation:fi .25s ease both}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.float{animation:float 3s ease-in-out infinite}
+</style>
+</head>
+<body>
+<div id="verTag" style="position:fixed;bottom:2px;right:5px;font-size:9px;color:#4a7a1e;z-index:99999;font-family:monospace;pointer-events:none">v2026-08-08-N</div><div id="root"></div>
+<script type="text/babel">
+var uS=React.useState,uE=React.useEffect,uM=React.useMemo,uR=React.useRef;
+var FB="https://parrasvalley-default-rtdb.firebaseio.com";
+var PIN="1986";
+var CULTS=["Persa","Slicer","Europeo","Morron","Minibel"];
+var RC=["#22c55e","#38bdf8","#f59e0b","#a78bfa","#f43f5e","#06b6d4"];
+var KG={"20lb":9.25,"20 lb":9.25,"8x2":7.60,"8x2lb":7.60,"12x1":5.70,"12x1lb":5.70,"11lb":5.13,"12x8oz":2.88,
+  "18lb":8.30,"18 lb":8.30,"25lb":11.57,"50lb":23.13,"Bushel":27,"1/9 bushel":9.07,
+  "RPC 35lb":15.88,"Verde RPC":13.61,"L":5.13,"XL":5.13,"Jumbo":5.13,"8x6":5.44,"12x2":5.00};
+var PZ={"33ct":33,"33 PZ":33,"18ct":18,"24ct":24,"36ct":36,"62ct":62,"12ct":12,"62 piezas":62};
+var CMAP={
+  Persa:{"Primera":"a","Segunda":"b","Tercera":"c"},
+  // SLICER (reglas dadas por Miguel, 15 sep 2026):
+  //   Super, Superselecto, Selecto, Large y Small  ->  PRIMERA
+  //   Plain, Choice y Tercera                      ->  TERCERA
+  // Antes Selecto y Large caian en Segunda y Small en Tercera, y "Tercera"
+  // ni siquiera existia: ese registro se tiraba sin avisar.
+  Slicer:{"Superselecto":"a","Super":"a","Super Selecto":"a","Selecto":"a","Select":"a",
+          "Super Select":"a","Large":"a","Small":"a","Primera":"a",
+          "Segunda":"b",
+          "Choice":"c","Plain":"c","Tercera":"c"},
+  Europeo:{"Primera":"a","Segunda":"b","Tercera":"c","Choice":"c","Bushel":"c","1/9":"c","Merma":"c","Plain":"c"},
+  Morron:{"Primera":"a","Segunda":"a","Choice":"b","Tercera":"c"},
+  Minibel:{"Primera":"a","Segunda":"b","Tercera":"b"}
+};
+var CLABS={
+  Persa:[{id:"a",l:"1a Primera",c:"#22c55e"},{id:"b",l:"2a Segunda",c:"#60a5fa"},{id:"c",l:"3a Tercera",c:"#f59e0b"}],
+  Slicer:[{id:"a",l:"1a Primera",c:"#22c55e"},{id:"b",l:"2a Segunda",c:"#60a5fa"},{id:"c",l:"3a Tercera",c:"#f59e0b"}],
+  Europeo:[{id:"a",l:"1a Primera",c:"#22c55e"},{id:"b",l:"2a Segunda",c:"#60a5fa"},{id:"c",l:"3a Tercera",c:"#f59e0b"}],
+  Morron:[{id:"a",l:"1a Primera",c:"#22c55e"},{id:"b",l:"Choice",c:"#60a5fa"},{id:"c",l:"Tercera",c:"#f59e0b"}],
+  Minibel:[{id:"a",l:"1a Primera",c:"#22c55e"},{id:"b",l:"2a Segunda",c:"#60a5fa"}]
+};
+// Peso por pieza del Slicer. Cambio el 14 de agosto de 2026: antes 0.325.
+// De aqui salen 36CT=9.72, 62CT=16.74 y 18CT=4.86 kg.
+var KG_PZ_SLICER=0.270;
+var MES3={ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,oct:10,nov:11,dic:12};
+// La app de Recibo guarda la fecha como texto ("mar, 05 ago 2026").
+// Aqui se maneja ISO ("2026-08-05"). Esta funcion traduce de uno al otro.
+function aArr(x){if(!x)return [];return Array.isArray(x)?x.filter(Boolean):Object.values(x).filter(Boolean);}
+function dosD(n){n=parseInt(n,10);return (n<10?"0":"")+n;}
+// La fecha escrita de Recibo llega en muchas formas segun quien la capturo:
+//   "mar, 05 ago 2026"   "13 de septiembre de 2026"   "2026-09-13"   "13/09/2026"
+// Antes solo se entendia la primera. Las demas se iban al respaldo por hora
+// y, si el cierre se guardo de madrugada, la fruta caia en el dia siguiente.
+// Eso era lo que metia la malla del corte de hoy en el dia de ayer.
+function leeFechaTexto(f){
+  var s=String(f||"").toLowerCase().replace(/[.,]/g," ");
+  var m=s.match(/(\d{4})\s*[-\/]\s*(\d{1,2})\s*[-\/]\s*(\d{1,2})/);       // 2026-09-13
+  if(m)return m[1]+"-"+dosD(m[2])+"-"+dosD(m[3]);
+  m=s.match(/(\d{1,2})\s*[-\/]\s*(\d{1,2})\s*[-\/]\s*(\d{4})/);            // 13/09/2026
+  if(m)return m[3]+"-"+dosD(m[2])+"-"+dosD(m[1]);
+  s=s.replace(/\bde\b/g," ").replace(/\bdel\b/g," ");                      // quita "de"/"del"
+  m=s.match(/(\d{1,2})\s+([a-zñáéíóú]+)\s+(\d{4})/);                       // 13 septiembre 2026
+  if(m&&MES3[m[2].slice(0,3)])return m[3]+"-"+dosD(MES3[m[2].slice(0,3)])+"-"+dosD(m[1]);
+  m=s.match(/([a-zñáéíóú]+)\s+(\d{1,2})\s+(\d{4})/);                       // septiembre 13 2026
+  if(m&&MES3[m[1].slice(0,3)])return m[3]+"-"+dosD(MES3[m[1].slice(0,3)])+"-"+dosD(m[2]);
+  return "";
+}
+// Respaldo: si el cierre se guardo antes de las 6 de la manana, la fruta es
+// del corte del dia anterior (se cerro de madrugada), no del dia del reloj.
+function tsISOcorte(ts){
+  var d=new Date(ts),madrugada=(d.getHours()<6);
+  if(madrugada)d=new Date(d.getTime()-6*3600000);
+  return {iso:d.getFullYear()+"-"+dosD(d.getMonth()+1)+"-"+dosD(d.getDate()),madrugada:madrugada};
+}
+// Igual que recISO pero dice COMO saco la fecha: del texto o del respaldo por hora.
+function recISOv(h){
+  var f=(h&&h.fecha)||"";
+  var iso=leeFechaTexto(f);
+  if(iso)return {iso:iso,via:"fecha escrita"};
+  if(h&&h.id){
+    var t=tsISOcorte(h.id);
+    return {iso:t.iso,via:t.madrugada
+      ?"RESPALDO: se cerro de madrugada, se cuenta del dia anterior"
+      :"RESPALDO: hora en que se guardo"};
+  }
+  return {iso:String(f),via:"sin fecha"};
+}
+function recISO(h){return recISOv(h).iso;}
+// El bushel (1/9) NO pesa igual en todos los cultivos:
+//   Europeo -> va por PIEZAS: 45 por caja, el peso no importa
+//   Morron  -> 25.5 lb  = 11.57 kg
+//   Slicer  -> 51 lb    = 23.13 kg   (igual que Plain de tercera)
+// produccion.html graba las presentaciones con distinto formato segun el
+// cultivo ("20 LBS", "12X1 LB", "11lb"...). Se normaliza antes de buscar.
+function nk(p){return String(p||"").toLowerCase().replace(/\s+/g,"").replace(/lbs/g,"lb");}
+var KGN={},PZN={};
+Object.keys(KG).forEach(function(k){KGN[nk(k)]=KG[k];});
+Object.keys(PZ).forEach(function(k){PZN[nk(k)]=PZ[k];});
+/* La presentacion casi nunca llega limpia: produccion y trazabilidad la
+   escriben con el tamano o el cliente pegado ("50 LBS SELECT", "20 LBS MDL",
+   "25 LBS / SUPER S WHOLESUM OG"). Antes eso no empataba con la tabla de
+   pesos y la caja valia CERO en silencio. Ahora, si no hay empate exacto, se
+   busca la llave conocida MAS LARGA con la que empiece la presentacion. */
+function porPrefijo(p,MAP){
+  var np=nk(p); if(!np)return undefined;
+  if(MAP[np]!==undefined)return MAP[np];
+  var mejor=undefined,largo=0;
+  Object.keys(MAP).forEach(function(k){
+    if(k.length>largo&&np.indexOf(k)===0){largo=k.length;mejor=MAP[k];}
+  });
+  return mejor;
+}
+function esBushel(pres){var p=String(pres||"").toLowerCase().replace(/\s+/g,"");return p.indexOf("1/9")>=0||p.indexOf("bushel")>=0;}
+function esPlain(pres){return String(pres||"").toLowerCase().indexOf("plain")>=0;}
+function kgPres(pres,cu){
+  if(cu==="Slicer"){
+    if(porPrefijo(pres,PZN))return null;
+    if(esBushel(pres)||esPlain(pres))return 23.13;
+  }
+  if(cu==="Morron"&&esBushel(pres))return 11.57;
+  // En Europeo SIEMPRE mandan las piezas, nunca el peso
+  if(cu==="Europeo")return null;
+  var v=porPrefijo(pres,KGN);
+  return v!==undefined?v:null;
+}
+function pzPres(pres,cu){
+  if(cu==="Europeo"&&esBushel(pres))return 45;
+  return porPrefijo(pres,PZN)||0;
+}
+// Caja de referencia para el factor: los kilos de cada calidad se convierten
+// a esta presentacion y se dividen entre las rejas cortadas.
+// Factor = cajas equivalentes / rejas. Si empacaste mas cajas que rejas, pasa de 1.
+// SLICER: todo se mide en CAJAS DE 36 CT, que es lo mismo que la de 25 LBS.
+//   36 CT = 25 LBS = 1      (base)
+//   18 CT = 0.5             (la mitad de las piezas)
+//   42 CT = 1.17 , 62 CT = 1.72   (piezas entre 36)
+//   50 LBS = 1/9 = 2        (72 piezas, el doble)
+function cj36(pres){
+  var p=nk(pres);
+  var mct=p.match(/(\d{2})ct/);          // 18ct, 36ct, 42ct, 62ct... aunque traiga texto pegado
+  if(mct)return parseInt(mct[1],10)/36;
+  if(p.indexOf("25lb")===0)return 1;
+  if(p.indexOf("50lb")===0)return 2;
+  if(esBushel(pres)||esPlain(pres))return 2;
+  var k=porPrefijo(pres,KGN);
+  if(k!==undefined)return k/11.57;        // cualquier otra caja de peso, contra la de 25 LBS
+  return 0;
+}
+function cajaRef(cu,ci){
+  if(cu==="Persa")   return {f:9.25, l:"cj 20 LBS"};
+  if(cu==="Slicer")  return {f:1,    l:"cj 36CT"};
+  if(cu==="Minibel") return {f:5.70, l:"cj 12x1"};
+  if(cu==="Morron")  return {f:5.13, l:"cj 11 LBS"};
+  if(cu==="Europeo") return ci==="c"?{f:45,l:"cj 1/9"}:{f:12,l:"cj 12CT"};
+  return {f:0,l:""};
+}
+function r2(n){return Math.round((n||0)*100)/100}
+function pc(a,b){return b>0?Math.round((a||0)/b*1000)/10:0}
+function ni(v){var x=parseInt(v);return isNaN(x)?0:x}
+function nf(v){var x=parseFloat(v);return isNaN(x)?0:x}
+function hoy(){var d=new Date(),m=d.getMonth()+1,dd=d.getDate();return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(dd<10?"0":"")+dd}
+function tsISO(ts){if(!ts)return "";var d=new Date(ts),m=d.getMonth()+1,dd=d.getDate();return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(dd<10?"0":"")+dd}
+function fget(k){return fetch(FB+"/"+k+".json").then(function(r){return r.json()}).catch(function(){return null})}
+// Antes se tragaba el error y resolvia como si hubiera grabado. Por eso, si
+// la red parpadeaba al guardar, la app decia OK, limpiaba la pantalla y
+// borraba el respaldo local, y en Firebase no habia llegado nada.
+function fput(k,v){return fetch(FB+"/"+k+".json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(v)}).then(function(r){return !!(r&&r.ok)}).catch(function(){return false})}
+function mCol(p){return p>20?"#ef4444":p>12?"#f59e0b":"#4ade80"}
+
+function App(){
+  // La casilla se regresaba a HOY en cada recarga. Por eso, despues de subir
+  // una version, se veia el corte de hoy y parecia que la app estaba mal.
+  // Ahora se queda en el dia que TU elegiste. Si tiene mas de 10 dias, se
+  // regresa a hoy sola para no quedarse pegada en un dia viejo.
+  function fechaGuardada(){
+    try{
+      var f=localStorage.getItem("pvt-rend-fecha-vista");
+      if(!f||!/^\d{4}-\d{2}-\d{2}$/.test(f))return hoy();
+      var d=(new Date(hoy())-new Date(f))/86400000;
+      return (d>=0&&d<=10)?f:hoy();
+    }catch(e){return hoy();}
+  }
+  var s1=uS(fechaGuardada()),fecha=s1[0],setFecha=s1[1];
+  var s2=uS("Persa"),cult=s2[0],setCult=s2[1];
+  var s3=uS("cap"),tab=s3[0],setTab=s3[1];
+  var s4=uS(false),auth=s4[0],setAuth=s4[1];
+  var s5=uS(""),pin=s5[0],setPin=s5[1];
+  var s6=uS(false),sp=s6[0],setSp=s6[1];
+  var s7=uS(""),msg=s7[0],setMsg=s7[1];
+  var s8=uS(""),jal=s8[0],setJal=s8[1];
+  var s9=uS({}),rec=s9[0],setRec=s9[1];
+  var s10=uS({}),prd=s10[0],setPrd=s10[1];
+  // Llaves que el usuario quito de ESTE dia y no deben regresar solas
+  var sDel=uS({}),delDia=sDel[0],setDelDia=sDel[1];
+  var s11=uS({}),inp=s11[0],setInp=s11[1];
+  var s12=uS({}),hist=s12[0],setHist=s12[1];
+  var sHd=uS(""),hDia=sHd[0],setHDia=sHd[1];   // dia abierto en el historial
+  var s13=uS(false),grd=s13[0],setGrd=s13[1];
+  var s14=uS(false),showPrdModal=s14[0],setShowPrdModal=s14[1];
+  var s15=uS(hoy()),prdFecha=s15[0],setPrdFecha=s15[1];
+  var s16=uS(""),diag=s16[0],setDiag=s16[1];
+  var s17=uS({}),prdLive=s17[0],setPrdLive=s17[1];
+  var s18=uS(""),vigMsg=s18[0],setVigMsg=s18[1];
+  // Estado del jalado automatico: que trajo cada app y a que hora
+  var s19=uS({rec:"",prd:"",t:0}),est=s19[0],setEst=s19[1];
+  var s20=uS(false),autoOn=s20[0],setAutoOn=s20[1];
+  // Cajas que faltaron (o sobraron) en produccion, puestas a mano.
+  // Se SUMAN a lo que trae produccion, asi que un jalado nuevo no las borra.
+  var s21=uS({}),man=s21[0],setMan=s21[1];
+  // El automatico se puede apagar. Se apaga solo cuando jalas produccion de
+  // OTRO dia, para que no te lo regrese al dia de hoy a los pocos minutos.
+  var s22=uS(true),autoJala=s22[0],setAutoJala=s22[1];
+  var s23=uS(null),origen=s23[0],setOrigen=s23[1];
+  // El veredicto de lo que trajo recibo, en grande y hasta arriba, para que no
+  // tengas que adivinar si jalo o no.
+  var s24=uS(null),avisoRec=s24[0],setAvisoRec=s24[1];
+  // Calidades que produccion graba y que la app no sabe clasificar. Antes esos
+  // registros se tiraban sin decir nada y la fruta desaparecia del rendimiento.
+  var s25=uS(null),calsRaras=s25[0],setCalsRaras=s25[1];
+  // De donde sale cada caja de LO EMPACADO: produccion ahorita, la copia
+  // guardada (que nunca resta) y el ajuste a mano.
+  var s26=uS(null),origenPrd=s26[0],setOrigenPrd=s26[1];
+  // Dia cargado con el reporte de trazabilidad (produccion no lo pisa)
+  var sTrz=uS(null),trz=sTrz[0],setTrz=sTrz[1];
+  var s27=uS(false),verPrd=s27[0],setVerPrd=s27[1];
+  var cals=CLABS[cult]||[];
+  var cmap=CMAP[cult]||{};
+
+  uE(function(){
+    fget("rendimientos-hist-v1").then(function(d){if(d&&typeof d==="object")setHist(d)});
+    try{
+      // El borrador viejo era uno solo para todo. Si existe, se archiva bajo su
+      // propia fecha y se borra, para no volver a mezclar dias.
+      var sv=localStorage.getItem("pvt-rend-trabajo");
+      if(sv){var vj=JSON.parse(sv);
+        if(vj&&vj.fecha){localStorage.setItem("pvt-rend-"+vj.fecha,JSON.stringify({rec:vj.rec||{},prd:vj.prd||{},inp:vj.inp||{},man:vj.man||{},_v:VER_FIX}));}
+        localStorage.removeItem(llaveDia(fecha));
+      }
+      var o=limpiaViejo(JSON.parse(localStorage.getItem("pvt-rend-"+hoy())||"null"));
+      if(o){
+        if(o.prd)Object.keys(o.prd).forEach(function(c2){o.prd[c2]=fixLlaves(o.prd[c2],c2);});
+        if(o.rec)Object.keys(o.rec).forEach(function(c3){o.rec[c3]=fixLlaves(o.rec[c3],c3);});
+        if(o.rec)setRec(o.rec);if(o.prd)setPrd(o.prd);if(o.inp)setInp(o.inp);if(o.man)setMan(o.man);
+      }
+    }catch(e){}
+    cargaTrz();
+  },[]);
+
+  /* ------------------------------------------------------------------
+     LO EMPACADO DESDE EL REPORTE DE TRAZABILIDAD
+     La app de produccion no siempre cuadra. El reporte por productor y
+     cultivo del otro sistema si. Con un link #trz=<base64> se carga ese
+     reporte como LO EMPACADO del dia y queda marcado (_trz) para que el
+     jalado automatico de produccion ya no lo pise.
+     Formato del payload:
+       {f:"2026-09-23", c:"Slicer", r:[{ra:"Cordillera",org:true,m:"4",
+         cal:"a", p:"25 LBS SELECT", cj:720}, ...]}
+     ------------------------------------------------------------------ */
+  var trzPend=uR(null);
+  function cargaTrz(){
+    try{
+      var h=String(location.hash||"");
+      var i=h.indexOf("trz=");
+      if(i<0)return;
+      var b=decodeURIComponent(h.slice(i+4));
+      var o=JSON.parse(decodeURIComponent(escape(atob(b))));
+      if(!o||!o.f||!o.c||!Array.isArray(o.r))return;
+      var acum={};
+      o.r.forEach(function(x){
+        if(!x)return;
+        var k=ranKey(x.ra||"SinRancho",x.org!==false,o.c,x.m);
+        if(!acum[k])acum[k]={malla:x.m||""};
+        if(!acum[k][x.cal])acum[k][x.cal]={};
+        var p=x.p||"";
+        acum[k][x.cal][p]=(ni(acum[k][x.cal][p])||0)+ni(x.cj);
+      });
+      // Se guarda YA en el servidor con la marca _trz, para que el primer
+      // jalado de produccion lo encuentre marcado y no lo pise.
+      fetch(capURL(o.f,o.c),{method:"PUT",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify(Object.assign({},acum,{_v:VER_FIX,_trz:1}))}).catch(function(){});
+      trzPend.current={f:o.f,c:o.c,acum:acum};
+      try{localStorage.setItem("pvt-rend-fecha-vista",o.f);}catch(e){}
+      try{history.replaceState(null,"",location.pathname+location.search);}catch(e){}
+      setCult(o.c); setFecha(o.f);
+    }catch(e){}
+  }
+  // Se aplica cuando la pantalla YA esta parada en ese dia y cultivo; si se
+  // aplicara antes, el cambio de fecha limpia el bloque y se pierde.
+  uE(function(){
+    var t=trzPend.current;
+    if(!t||t.f!==fecha||t.c!==cult)return;
+    trzPend.current=null;
+    setPrd(function(pp){var n=JSON.parse(JSON.stringify(pp||{}));n[t.c]=t.acum;return n;});
+    setTrz({f:t.f,cult:t.c});
+    fl("Se cargo lo empacado del reporte de trazabilidad: "+t.c+" del "+t.f);
+  },[fecha,cult]);
+  /* ------------------------------------------------------------------
+     CADA DIA CON SUS PROPIOS DATOS
+     Antes habia un solo borrador y al cambiar la fecha arriba se quedaba
+     en pantalla lo del dia anterior, mezclado con lo nuevo. Ahora lo
+     capturado y lo jalado se guarda por fecha: al cambiar de dia se
+     archiva lo que habia y se trae lo de ese dia (o pantalla limpia).
+     ------------------------------------------------------------------ */
+  function llaveDia(f){return "pvt-rend-"+f;}
+  // Los borradores guardados por una version ANTERIOR al arreglo de fechas
+  // traen lo llegado y lo empacado mal fechado. Se tiran solos la primera vez
+  // que se abre ese dia; lo que capturaste a mano (pesos por reja y ajustes de
+  // cajas) NO se toca, porque eso no depende de la fecha de recibo.
+  function limpiaViejo(o){
+    if(!o)return null;
+    if(o._v===VER_FIX)return o;
+    return {rec:{},prd:{},inp:o.inp||{},man:o.man||{},_v:VER_FIX,_sano:1};
+  }
+  var refF=uR(fecha), cargando=uR(false);
+  uE(function(){
+    if(refF.current===fecha)return;
+    // se archiva lo que hay, bajo SU propia fecha
+    try{localStorage.setItem(llaveDia(refF.current),JSON.stringify({rec:rec,prd:prd,inp:inp,man:man,_v:VER_FIX}))}catch(e){}
+    var o=null;
+    try{o=limpiaViejo(JSON.parse(localStorage.getItem(llaveDia(fecha))||"null"))}catch(e){}
+    setRec((o&&o.rec)||{});setPrd((o&&o.prd)||{});setInp((o&&o.inp)||{});setMan((o&&o.man)||{});
+    setDelDia({});   // lo quitado es de cada dia, no se arrastra
+    setDiag("");
+    refF.current=fecha;cargando.current=true;
+    try{localStorage.setItem("pvt-rend-fecha-vista",fecha)}catch(e){}
+    fl("Dia "+fecha+(o&&o._sano?": se descarto lo que habia mal fechado, se vuelve a jalar solo"
+      :(o?": se trajo lo que tenias capturado":": pantalla limpia")));
+  },[fecha]);
+  uE(function(){
+    if(cargando.current){cargando.current=false;return;}   // el estado todavia es del dia anterior
+    if(refF.current!==fecha)return;
+    try{localStorage.setItem(llaveDia(fecha),JSON.stringify({rec:rec,prd:prd,inp:inp,man:man,_v:VER_FIX}))}catch(e){}
+  },[fecha,rec,prd,inp,man]);
+
+  /* ------------------------------------------------------------------
+     JALADO AUTOMATICO
+     Al abrir, al cambiar de dia o de cultivo, y cada 5 minutos mientras
+     la pestana este a la vista, se traen solas Recibo y Produccion. Asi
+     el reporte ya esta hecho al llegar, sin tocar ningun boton.
+     - No corre si alguien esta escribiendo en un campo, para no pisarle.
+     - Produccion se fusiona con lo que ya habia (nunca resta) y Recibo
+       solo pisa los ranchos que de verdad trajo, asi que lo capturado a
+       mano se conserva.
+     ------------------------------------------------------------------ */
+  // Sirve para que el jalado automatico de cada 5 minutos no te pise un numero
+  // mientras lo estas tecleando. PERO la casilla de la fecha tambien es un
+  // input: al cambiar el dia el cursor se quedaba ahi, esto decia "esta
+  // escribiendo" y el jalado se cancelaba. Por eso cambiabas de fecha y no
+  // pasaba nada. La fecha y los desplegables ya no cuentan como escribir.
+  function escribiendo(){
+    var a=document.activeElement;
+    if(!a)return false;
+    var t=(a.tagName||"").toLowerCase();
+    if(t==="textarea")return true;
+    if(t!=="input")return false;              // select, boton, etc: no es escribir
+    var ty=(a.type||"").toLowerCase();
+    if(ty==="date"||ty==="checkbox"||ty==="radio"||ty==="button")return false;
+    return true;
+  }
+  // Guarda el reporte COMPLETO como imagen, incluyendo lo que no cabe en
+  // pantalla. Asi se sube entero al grupo sin recortes.
+  // Arma la imagen del reporte COMPLETO y la manda al menu de compartir del
+  // telefono (ahi sale WhatsApp). En computadora no hay menu, asi que la baja.
+  // Lo marcado con data-nofoto no sale: los campos de captura y de ajuste.
+  // Arma el lienzo del reporte COMPLETO.
+  // ANTES se le pedia a html2canvas que redibujara el reporte a otro ancho al
+  // vuelo. Media mal el alto y la foto salia cortada por abajo: faltaba el
+  // desglose y las graficas. Ahora se hace una COPIA del reporte fuera de la
+  // pantalla, a 1400 px y con todo abierto, se MIDE de verdad, y recien
+  // entonces se toma la foto con ese alto exacto. Asi no se corta nada.
+  function armarLienzo(idEl){
+    var el=document.getElementById(idEl||"reporte");
+    if(!el){fl("Primero jala recibo y produccion");return null;}
+    if(!window.html2canvas){fl("No cargo el generador de imagen, revisa la senal");return null;}
+    var ANCHO=1100;
+    var jaula=document.createElement("div");
+    jaula.setAttribute("data-nofoto","1");
+    jaula.style.cssText="position:absolute;left:-30000px;top:0;width:"+ANCHO+"px;"+
+      "background:#07100a;padding:16px;box-sizing:border-box;";
+    var copia=el.cloneNode(true);
+    copia.removeAttribute("id");                 // no puede haber dos "reporte"
+    copia.style.width="100%";
+    copia.style.maxWidth="none";
+    // EN LA FOTO VA TODO EN UNA SOLA COLUMNA. En dos columnas la de la
+    // izquierda se termina antes y queda medio cuadro en negro: la imagen
+    // salia enorme y con la mitad desperdiciada, por eso todo se veia chico.
+    copia.style.display="block";
+    [].slice.call(copia.children).forEach(function(h){
+      if(!h||!h.style)return;
+      h.style.width="100%";h.style.maxWidth="none";h.style.minWidth="0";
+      h.style.flex="none";h.style.marginBottom="12px";
+    });
+    // fuera lo que no va en la foto: campos de captura y botones de ajuste
+    [].slice.call(copia.querySelectorAll('[data-nofoto="1"]')).forEach(function(n){
+      if(n.parentNode)n.parentNode.removeChild(n);
+    });
+    // se abre todo lo recortado o con barra, y se quitan los limites de ancho
+    // que estan pensados para la pantalla del telefono
+    var ns=[copia].concat([].slice.call(copia.querySelectorAll("*")));
+    ns.forEach(function(n){
+      if(!n||!n.style)return;
+      var ov=String(n.style.overflow||"");
+      if(ov==="hidden"||ov==="auto"||ov==="scroll")n.style.overflow="visible";
+      if(n.style.overflowX)n.style.overflowX="visible";
+      if(n.style.overflowY)n.style.overflowY="visible";
+      if(n.style.maxHeight)n.style.maxHeight="none";
+      var mw=String(n.style.maxWidth||"");
+      if(mw.indexOf("min(100%")>=0||mw==="100%")n.style.maxWidth="none";
+      var mnw=String(n.style.minWidth||"");
+      if(mnw.indexOf("min(100%")>=0)n.style.minWidth="0";
+    });
+    jaula.appendChild(copia);
+    document.body.appendChild(jaula);
+    function quita(){try{document.body.removeChild(jaula)}catch(e){}}
+    // el alto REAL de la copia ya acomodada, no el de la pantalla
+    var an=Math.max(jaula.scrollWidth,ANCHO);
+    var al=Math.max(jaula.scrollHeight,copia.scrollHeight+32,200);
+    function tomar(esc){
+      return window.html2canvas(jaula,{
+        backgroundColor:"#07100a",
+        scale:esc,
+        width:an,height:al,
+        windowWidth:an,windowHeight:al,
+        scrollX:0,scrollY:0,
+        x:0,y:0
+      });
+    }
+    // Si sale tan grande que el telefono no la aguanta, se reintenta mas chica
+    // en vez de quedarse sin nada.
+    var esc=window.innerWidth<900?1.5:2;
+    if(al*esc>16000)esc=Math.max(1,16000/al);     // tope de alto que aguantan los telefonos
+    return tomar(esc)
+      .catch(function(){return tomar(1);})
+      .then(function(cv){quita();return cv;},function(e){quita();throw e;});
+  }
+  // Igual que en la app de inventario: primero te ENSENA la imagen y ahi
+  // decides. Empieza en COMPLETA (toda la imagen cabe en la pantalla, aunque
+  // se vea chica) para que de un vistazo compruebes que no falta nada abajo.
+  // Con GRANDE la ves al ancho de la pantalla y le das scroll para leerla.
+  function verImagen(cv,nombre){
+    var url=cv.toDataURL("image/png");
+    var puede=false;
+    try{puede=!!(navigator.share&&navigator.canShare);}catch(e){}
+    var ov=document.createElement("div");
+    ov.style.cssText="position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.95);"+
+      "display:flex;flex-direction:column;font-family:inherit;";
+    var barra=document.createElement("div");
+    barra.style.cssText="display:flex;gap:7px;align-items:center;flex-wrap:wrap;"+
+      "padding:9px 11px;background:#07100a;border-bottom:1px solid rgba(74,222,128,.2);flex:none;";
+    function boton(txt,fondo,borde,color){
+      var b=document.createElement("button");
+      b.textContent=txt;
+      b.style.cssText="background:"+fondo+";border:1px solid "+borde+";border-radius:8px;color:"+color+
+        ";font-weight:900;font-size:12px;padding:8px 14px;cursor:pointer;font-family:inherit;";
+      return b;
+    }
+    var bCompartir=boton("COMPARTIR","rgba(37,211,102,.18)","rgba(37,211,102,.6)","#25D366");
+    var bZoom=boton("VER GRANDE","rgba(255,255,255,.07)","rgba(255,255,255,.18)","#c0d0a0");
+    var bBajar=document.createElement("a");
+    bBajar.textContent="DESCARGAR";bBajar.download=nombre;bBajar.href=url;
+    bBajar.style.cssText="background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);"+
+      "border-radius:8px;color:#c0d0a0;font-weight:900;font-size:12px;padding:8px 14px;"+
+      "cursor:pointer;text-decoration:none;font-family:inherit;";
+    var bCerrar=boton("CERRAR","transparent","rgba(255,255,255,.18)","#7a9a6a");
+    if(puede)barra.appendChild(bCompartir);
+    barra.appendChild(bZoom);
+    barra.appendChild(bBajar);
+    var esp=document.createElement("div");esp.style.cssText="flex:1;";
+    barra.appendChild(esp);
+    barra.appendChild(bCerrar);
+    var nota=document.createElement("div");
+    nota.style.cssText="padding:6px 11px;font-size:10.5px;color:#7a9a6a;background:#07100a;flex:none;"+
+      "border-bottom:1px solid rgba(255,255,255,.06);";
+    var caja=document.createElement("div");
+    caja.style.cssText="flex:1;overflow:auto;padding:10px;display:flex;flex-direction:column;"+
+      "align-items:center;-webkit-overflow-scrolling:touch;";
+    var img=document.createElement("img");
+    img.src=url;img.alt="reporte";
+    var fin=document.createElement("div");
+    fin.textContent="— FIN DEL REPORTE —";
+    fin.style.cssText="flex:none;color:#4a6a3a;font-size:10px;font-weight:900;letter-spacing:2px;"+
+      "padding:10px 0 4px;";
+    caja.appendChild(img);caja.appendChild(fin);
+    ov.appendChild(barra);ov.appendChild(nota);ov.appendChild(caja);
+    document.body.appendChild(ov);
+    // COMPLETA: cabe entera en la pantalla.  GRANDE: al ancho, con scroll.
+    var completa=true;
+    function pinta(){
+      if(completa){
+        img.style.cssText="max-width:100%;max-height:100%;width:auto;height:auto;"+
+          "object-fit:contain;display:block;border-radius:5px;flex:none;";
+        bZoom.textContent="VER GRANDE";
+        nota.textContent="Esta es TODA la imagen que se va a mandar ("+cv.width+" x "+cv.height+
+          "). Si se ve chica es normal: al enviarla va en su tamano. Usa VER GRANDE para leerla.";
+      }else{
+        img.style.cssText="width:100%;max-width:none;height:auto;display:block;border-radius:5px;flex:none;";
+        bZoom.textContent="VER COMPLETA";
+        nota.textContent="Al ancho de la pantalla. Deslizala hasta abajo, hasta el letrero FIN DEL REPORTE.";
+      }
+      caja.scrollTop=0;
+    }
+    pinta();
+    bZoom.onclick=function(){completa=!completa;pinta();};
+    function cerrar(){try{document.body.removeChild(ov)}catch(e){}}
+    bCerrar.onclick=cerrar;
+    bCompartir.onclick=function(){
+      bCompartir.disabled=true;bCompartir.textContent="ABRIENDO...";
+      var vuelve=function(){bCompartir.disabled=false;bCompartir.textContent="COMPARTIR";};
+      cv.toBlob(function(bl){
+        if(!bl){vuelve();fl("No se pudo preparar la imagen. Usa DESCARGAR.");return;}
+        try{
+          var arch=new File([bl],nombre,{type:"image/png"});
+          // Solo el archivo: con texto incluido hay telefonos que se quedan
+          // con el texto y sueltan la imagen.
+          var dat={files:[arch],title:"Rendimientos "+cult+" "+fecha};
+          if(!navigator.canShare(dat)){vuelve();
+            fl("Este telefono no deja compartir la imagen. Usa DESCARGAR.");return;}
+          navigator.share(dat).then(vuelve).catch(vuelve);
+        }catch(e){vuelve();fl("No se pudo compartir: "+e.message);}
+      },"image/png");
+    };
+  }
+  // Foto de cualquier bloque por su id (el reporte, el dia del historial...)
+  function foto(idEl,nombre){
+    var pr=armarLienzo(idEl);
+    if(!pr)return;
+    fl("Armando la imagen, espera...");
+    pr.then(function(cv){verImagen(cv,(nombre||"reporte")+".png");})
+      .catch(function(e){fl("No se pudo generar la imagen: "+e.message)});
+  }
+  function compartirReporte(){
+    var pr=armarLienzo();
+    if(!pr)return;
+    fl("Armando la imagen COMPLETA del reporte, espera...");
+    pr.then(function(cv){
+      verImagen(cv,"rendimientos-"+cult+"-"+fecha+".png");
+    }).catch(function(e){fl("No se pudo generar la imagen: "+e.message)});
+  }
+  // forzado = corre aunque el automatico este en pausa
+  // ruidoso  = puede pintar el letrero rojo de diagnostico
+  // Borra TODO lo de este dia y este cultivo: lo de la pantalla, el borrador
+  // local y la copia guardada en el servidor. Hace falta porque produccion se
+  // fusiona con mergeMax y nunca resta: si un dia quedo contaminado con el
+  // corte de otro dia, no hay forma de sacarlo si no se borra la copia.
+  function limpiarDia(){
+    if(!window.confirm("Se borra TODO lo de "+cult+" del "+fecha+
+      ": lo jalado, lo capturado a mano y la copia guardada. Los demas dias no se tocan. Seguro?"))return;
+    setAutoJala(false);
+    var vac=function(p){var n=JSON.parse(JSON.stringify(p));delete n[cult];return n;};
+    setRec(vac);setPrd(vac);setInp(vac);setMan(vac);
+    setDiag("");
+    setEst({rec:"",prd:"",t:0});
+    fetch(capURL(fecha,cult),{method:"PUT",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({})}).then(function(){
+        fl("Listo: "+cult+" del "+fecha+" quedo en blanco. Jala o captura de nuevo.");
+      }).catch(function(){
+        fl("Se limpio la pantalla, pero no se pudo borrar la copia del servidor. Revisa la senal.");
+      });
+  }
+  // De donde sale cada reja de LO LLEGADO: lote por lote, con el dia que la app
+  // le asigna y por que. Lo que no cuadra se ve de inmediato.
+  function verOrigen(){
+    setJal("r");
+    Promise.all([fget("recibo-inv-v1"),fget("recibo-hist-v1")]).then(function(vs){
+      var cn=cult.toLowerCase(),filas=[];
+      var lin=(vs[0]&&vs[0][cn])||{};
+      aArr(lin.lotes).forEach(function(l){
+        if(!l||!l.rancho)return;
+        var f=tsISO(l.ts);
+        filas.push({de:"Dia abierto en recibo (todavia no lo cierran)",abierto:1,
+          rancho:l.rancho,malla:String(l.malla||"").toUpperCase(),
+          cajas:ni(l.cajas),dia:f,via:"hora en que se capturo el lote"});
+      });
+      aArr(vs[1]).forEach(function(h){
+        if(String((h&&h.lineaNombre)||"").toLowerCase()!==cn)return;
+        var r=recISOv(h);
+        var hora=h.id?new Date(h.id).toLocaleString("es-MX",{day:"2-digit",month:"2-digit",
+          hour:"2-digit",minute:"2-digit"}):"";
+        aArr(h.lotes).forEach(function(l){
+          if(!l||!l.rancho)return;
+          filas.push({de:"Cierre: \""+(h.fecha||"sin fecha escrita")+"\""+(hora?"  · guardado "+hora:""),
+            rancho:l.rancho,malla:String(l.malla||"").toUpperCase(),
+            cajas:ni(l.cajas),dia:r.iso,via:r.via});
+        });
+      });
+      // Se juntan los lotes por dia+rancho+malla. Asi ves un renglon por malla,
+      // que es como lo piensas tu, y no veinte renglones sueltos.
+      var ag={},ord=[];
+      filas.forEach(function(f){
+        var k=f.dia+"|"+f.rancho+"|"+f.malla+"|"+f.de;
+        if(!ag[k]){ag[k]=JSON.parse(JSON.stringify(f));ord.push(k);}
+        else ag[k].cajas+=f.cajas;
+      });
+      var out=ord.map(function(k){return ag[k];});
+      out.sort(function(a,b){return (a.dia<b.dia?1:a.dia>b.dia?-1:0);});
+      setOrigen(out);setJal("");
+    }).catch(function(e){setJal("");fl("No se pudo leer recibo: "+e.message);});
+  }
+  // El dia abierto de recibo NO sabe de que corte es cada reja: se fecha con la
+  // hora en que lo capturaron, y ahi se revuelve el corte de ayer con el de hoy.
+  // Por eso desde el panel se puede mandar un renglon al dia que TU digas, con
+  // un clic, sin volver a teclear las rejas. Queda marcado como tuyo (_man),
+  // asi que ningun jalado posterior te lo borra ni te lo cambia.
+  function usarPara(f){
+    var k=ranKey(f.rancho,true,cult,f.malla);
+    setRec(function(p){
+      var n=JSON.parse(JSON.stringify(p));
+      if(!n[cult])n[cult]={};
+      n[cult][k]={rejas:f.cajas,malla:f.malla,_man:1,_ts:Date.now()};
+      return n;
+    });
+    setOrigen(null);
+    fl("Listo: "+f.cajas+" rejas de malla "+f.malla+" quedaron en el "+fecha+". Ya puedes poner el peso por reja.");
+  }
+  function jalaTodo(forzado,ruidoso){
+    // Lo que TU pides (cambiar de dia, apretar el boton) se hace siempre.
+    // Solo el refresco de fondo se aguanta mientras tecleas.
+    if(!forzado&&escribiendo())return;
+    if(!forzado&&!autoJala)return;
+    try{jRec();}catch(e){}
+    try{jPrd(fecha,!ruidoso);}catch(e){}
+  }
+  uE(function(){
+    var vivo=true;
+    setAutoJala(true);
+    var t0=setTimeout(function(){if(vivo){setAutoOn(true);jalaTodo(true,false);}},900);
+    var iv=setInterval(function(){
+      if(document.hidden)return;
+      jalaTodo();
+    },300000);
+    function alVolver(){if(!document.hidden)jalaTodo();}
+    document.addEventListener("visibilitychange",alVolver);
+    return function(){
+      vivo=false;clearTimeout(t0);clearInterval(iv);
+      document.removeEventListener("visibilitychange",alVolver);
+    };
+  },[fecha,cult]);
+
+  function fl(m){setMsg(m);setTimeout(function(){setMsg("")},5000)}
+  function gi(r,k){var c=inp[cult];if(!c)return "";var x=c[r];if(!x)return "";return x[k]||""}
+  // OJO: cada malla lleva SU peso (o piezas) por reja. La malla que se queda
+  // sin ese dato contaba CERO en lo llegado aunque sus rejas si salieran en el
+  // total de rejas: la suma se quedaba corta y no habia forma de notarlo
+  // (700 de malla 3 + 820 de malla 6 = 1,520 rejas, pero solo contaba 820).
+  // Ahora, al capturarlo en una malla, se copia solo a las que esten vacias.
+  function si(r,k,v){
+    var copiadas=[];
+    if((k==="pesoReja"||k==="piezasReja")&&String(v).trim()!==""&&r!=="_nuevo"){
+      Object.keys(rec[cult]||{}).forEach(function(k2){
+        if(k2===r||k2==="_nuevo")return;
+        if(!(ni((rec[cult][k2]||{}).rejas)>0))return;
+        if(String((((inp||{})[cult]||{})[k2]||{})[k]||"").trim()==="")copiadas.push(k2);
+      });
+    }
+    setInp(function(p){
+      var n=JSON.parse(JSON.stringify(p));
+      if(!n[cult])n[cult]={};
+      if(!n[cult][r])n[cult][r]={};
+      n[cult][r][k]=v;
+      copiadas.forEach(function(k2){
+        if(!n[cult][k2])n[cult][k2]={};
+        n[cult][k2][k]=v;
+      });
+      return n;
+    });
+    if(copiadas.length)fl("Se puso el mismo dato en "+copiadas.length+
+      " malla(s) que lo traian vacio. Cambialo si alguna es distinta.");
+  }
+  // Una misma combinacion rancho+tipo puede traer varias mallas el mismo dia
+  // (ayer se corto la 3 y la 6, las dos organicas). Aqui se agregan a mano.
+  function addMalla(ra,tipo,m){
+    m=String(m||"").trim();
+    if(!m)return;
+    var k=ranKey(ra,true,cult,m);   // 6A/6B mandan; las demas quedan como organico
+    setRec(function(p){var n=JSON.parse(JSON.stringify(p));
+      if(!n[cult])n[cult]={};
+      // _man marca las mallas que agregaste tu. Al jalar de recibo, estas
+      // se respetan y todo lo demas se rehace, para que no quede pegada
+      // fruta de otro dia que haya cargado una version anterior.
+      if(!n[cult][k])n[cult][k]={rejas:"",malla:m,_man:1,_ts:Date.now()};
+      else {n[cult][k]._man=1;n[cult][k]._ts=Date.now();}
+      return n;});
+  }
+  function delKey(k){
+    // Antes solo borraba de LO LLEGADO. Si la tarjeta venia de produccion o de
+    // la copia guardada, seguia en pantalla y regresaba al siguiente jalado:
+    // por eso QUITAR "no quitaba". Ahora se va de los cuatro lados y tambien
+    // de la copia del servidor.
+    var quita=function(o){var n=JSON.parse(JSON.stringify(o||{}));
+      if(n[cult])delete n[cult][k];return n;};
+    var nPrd=quita(prd);
+    setRec(quita);setInp(quita);setMan(quita);setPrd(nPrd);
+    // Se apunta en la copia del servidor que esta llave la quitaste de este
+    // dia, para que el jalado de cada dos minutos no te la regrese.
+    var _delAnt={};
+    try{_delAnt=(delDia&&delDia[cult])?JSON.parse(JSON.stringify(delDia[cult])):{};}catch(e){}
+    _delAnt[k]=1;
+    setDelDia(function(p){var n=JSON.parse(JSON.stringify(p||{}));
+      if(!n[cult])n[cult]={};n[cult][k]=1;return n;});
+    fetch(capURL(fecha,cult),{method:"PUT",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(Object.assign({},nPrd[cult]||{},{_v:VER_FIX,_del:_delAnt}))})
+      .then(function(){fl("Se quito "+nomLlave(k)+(mallaLlave(k)?" malla "+mallaLlave(k):"")+" de este dia.");})
+      .catch(function(){fl("Se quito de la pantalla, pero no se pudo borrar la copia del servidor.");});
+  }
+  function gMan(k,cal,pres){
+    try{return man[cult][k][cal][pres];}catch(e){return "";}
+  }
+  // El ajuste se ACUMULA: si ya habias puesto +171 y ahora pones -171, queda en
+  // cero y desaparece. Antes lo reemplazaba y por eso el -171 no las quitaba.
+  // Con v vacio se borra el ajuste completo (el boton x de la etiqueta).
+  function sMan(k,cal,pres,v){
+    setMan(function(p){var n=JSON.parse(JSON.stringify(p));
+      if(!n[cult])n[cult]={};
+      if(!n[cult][k])n[cult][k]={};
+      if(!n[cult][k][cal])n[cult][k][cal]={};
+      var ant=ni(n[cult][k][cal][pres]);
+      var nuevo=(v===""?0:ant+ni(v));
+      if(nuevo===0)delete n[cult][k][cal][pres];
+      else n[cult][k][cal][pres]=nuevo;
+      return n;});
+  }
+  // Lista de presentaciones ya vistas en este cultivo, para sugerir al escribir
+  function presVistas(){
+    var out={};
+    Object.keys(prd[cult]||{}).forEach(function(k){
+      Object.keys(prd[cult][k]||{}).forEach(function(ci){
+        if(ci==="malla")return;
+        Object.keys(prd[cult][k][ci]||{}).forEach(function(p){out[p]=1;});
+      });
+    });
+    Object.keys(KG).forEach(function(p){out[p]=1;});
+    Object.keys(PZ).forEach(function(p){out[p]=1;});
+    return Object.keys(out).sort();
+  }
+  // Rejas a mano, para cuando no se jala de la app de Recibo.
+  // Las rejas que TECLEAS tu quedan marcadas como tuyas (_man). Si no, el
+  // jalado automatico de cada 5 minutos las borraba: rehace lo llegado desde
+  // recibo y lo que no venia de recibo se caia. Pasaba sobre todo con las
+  // tarjetas que salen por PRODUCCION cuando recibo no tiene nada de ese dia:
+  // capturabas las rejas, se veia bien, y a los minutos quedaba solo lo
+  // empacado. Si borras el numero se quita la marca, para que el proximo
+  // jalado pueda volver a traer lo de recibo.
+  function sRej(rk,v){setRec(function(p){var n=JSON.parse(JSON.stringify(p));
+    if(!n[cult])n[cult]={};
+    if(!n[cult][rk])n[cult][rk]={rejas:"",malla:""};
+    n[cult][rk].rejas=(v===""?"":ni(v));
+    if(String(v).trim()===""){delete n[cult][rk]._man;delete n[cult][rk]._ts;}
+    else {n[cult][rk]._man=1;n[cult][rk]._ts=Date.now();}
+    return n})}
+
+  // El recibo marca el lote como organico. Se separa igual que produccion
+// (PVT ORG / PVT CV) para que los dos lados se puedan cruzar.
+// REGLAS FIJAS: hay combinaciones que SIEMPRE son organicas aunque en la
+// captura las hayan marcado como convencional. Se corrigen aqui.
+// Que rancho tiene cada cultivo. Solo se muestran las tarjetas que aplican.
+var RANCHO_CULT={
+  "PVT":["Persa","Slicer"],
+  "Cordillera":["Persa","Slicer","Europeo","Morron","Minibel"],
+  "Forrajera":["Persa","Morron","Minibel"]
+};
+function ranchosDe(cu){
+  var out=[];
+  Object.keys(RANCHO_CULT).forEach(function(r){
+    if(RANCHO_CULT[r].indexOf(cu)>=0)out.push(r);
+  });
+  return out.length?out:Object.keys(RANCHO_CULT);
+}
+// Llaves listas para capturar a mano: cada rancho del cultivo en sus dos
+// versiones, ORG y CV, ya con el mismo formato que usa produccion. Antes las
+// tarjetas salian como "PVT" a secas y no cruzaban con "PVT ORG"/"PVT CV".
+// Ya no se pintan tarjetas de relleno. Solo sale lo que de verdad tiene datos,
+// y lo nuevo se agrega desde la barra de arriba, por malla.
+function ranchosKeys(cu){return [];}
+// EN PERSA manda el RANCHO, no la malla (Miguel, 16 sep 2026):
+//   PVT        -> CONVENCIONAL  (esta cortando la malla 5)
+//   Cordillera -> ORGANICO      (malla 7)
+//   Forrajera  -> ORGANICO      (mallas 1 y 3)
+// Esto es SOLO para Persa. En Europeo sigue mandando la malla, porque ahi
+// Cordillera si tiene convencional (la 6 y la 6B).
+var RANCHO_TIPO={
+  Persa:{pvt:"CV",cordillera:"ORG",forrajera:"ORG"}
+};
+function nomRancho(rancho){
+  var r=String(rancho||"").toLowerCase().replace(/[^a-z]/g,"");
+  if(r.indexOf("cord")>=0||r==="crp"||r==="cpr")return "cordillera";
+  if(r.indexOf("forraj")>=0)return "forrajera";
+  if(r.indexOf("pvt")>=0||r.indexOf("pbt")>=0)return "pvt";
+  return r;
+}
+function tipoPorRancho(rancho,cu){
+  var t=RANCHO_TIPO[cu];
+  if(!t)return null;
+  var v=t[nomRancho(rancho)];
+  return v?(v==="ORG"):null;
+}
+function forzarOrg(rancho,cu){
+  var r=String(rancho||"").toLowerCase().replace(/[^a-z]/g,"");
+  var esCordillera=(r.indexOf("cord")>=0||r==="crp"||r==="cpr");
+  if(esCordillera&&cu==="Slicer")return true;
+  return false;
+}
+// En Europeo el seguimiento es POR MALLA: la llave lleva rancho + tipo + malla.
+// En los demas cultivos la llave se queda como estaba.
+// El seguimiento es POR MALLA en TODOS los cultivos: la llave lleva
+// rancho + tipo + malla, para poder separar cuanto llego y cuanto se
+// empaco de cada malla en el mismo dia.
+var CULT_MALLA={Persa:true,Slicer:true,Europeo:true,Morron:true,Minibel:true};
+/* QUE MALLA ES DE QUE RANCHO (Miguel, 23 sep 2026)
+   En PERSA: Cordillera corta la 7, Forrajera la 1 y la 3, PVT la 5. Cualquier
+   otra combinacion no existe y no se pinta: se avisa en rojo con nombre y
+   rejas para que no desaparezca en silencio. Los demas cultivos no tienen
+   lista todavia, asi que ahi pasa todo. */
+var MALLAS_RANCHO={Persa:{cordillera:["7"],forrajera:["1","3"],pvt:["5"]}};
+function mallaValida(cu,k){
+  var reg=MALLAS_RANCHO[cu];if(!reg)return true;
+  var p=partesLlave(k);
+  var r=nomRancho(p.rancho),m=String(p.malla||"").toUpperCase();
+  var lista=reg[r];
+  if(!lista)return true;         // rancho sin regla (FEPO, otros)
+  if(!m)return true;             // sin malla escrita: no se juzga
+  return lista.indexOf(m)>=0;
+}
+// LA MALLA MANDA. Toda malla es ORGANICA menos las que esten en esta lista,
+// que son convencionales. Hoy solo la 6B. Si cambia, se agrega aqui.
+// REGLA (Miguel, 16 sep 2026): manda lo que traiga RECIBO DE FRUTA.
+// La malla solo decide cuando trae lado escrito: 6A es organico y 6B es
+// convencional. Una malla sin lado (6 a secas) NO cambia nada: se queda con
+// lo que capturaron en recibo. Antes cualquier malla que no fuera "6b" se
+// forzaba a organico, y por eso la 6 del corte convencional salia como ORG.
+// 6B convencional, 6A organica. Y la "6" a secas tambien es CONVENCIONAL:
+// es la que se estuvo cortando, y dejarla a lo que trajera recibo la sacaba
+// organica cuando no lo era. Cuando ya escriban el lado siempre, esto deja
+// de importar porque manda 6A / 6B.
+var MALLAS_CV={"6b":1,"6":1};
+var MALLAS_ORG={"6a":1};
+function mallaEsCV(m){return !!MALLAS_CV[String(m||"").trim().toLowerCase()];}
+function mallaEsORG(m){return !!MALLAS_ORG[String(m||"").trim().toLowerCase()];}
+function ranKey(rancho,esOrg,cu,malla){
+  var m=String(malla||"").trim().toUpperCase();   // 6b y 6B son la misma malla
+  var org,porRancho=tipoPorRancho(rancho,cu);
+  if(porRancho!==null)org=porRancho;              // Persa: manda el rancho
+  else if(mallaEsCV(m))org=false;                 // 6 y 6B: convencional siempre
+  else if(mallaEsORG(m))org=true;                 // 6A: organico siempre
+  else org=(esOrg||forzarOrg(rancho,cu));         // lo demas: como lo tenga recibo
+  var base=(rancho||"SinRancho")+(org?" ORG":" CV");
+  if(CULT_MALLA[cu]&&m)base+=" M"+m;
+  return base;
+}
+// Parte la llave en sus tres pedazos
+function partesLlave(k){
+  var m=String(k).match(/^(.*)\s(ORG|CV)(?:\sM(.*))?$/);
+  if(!m)return {rancho:k,tipo:"",malla:""};
+  return {rancho:m[1],tipo:m[2],malla:m[3]||""};
+}
+function ranTipo(l,cu){
+  var org=(l&&(l.organico===true||l.organico==="si"||l.organico==="Si"||
+    String(l.tipoProd||"").toLowerCase().indexOf("org")>=0||
+    String(l.tipo||"").toLowerCase().indexOf("org")>=0));
+  return ranKey(l&&l.rancho?l.rancho:"SinRancho",org,cu,l&&l.malla);
+}
+function jRec(){
+    setJal("r");
+    setAvisoRec({buscando:1,f:fecha,cult:cult});
+    Promise.all([fget("recibo-inv-v1"),fget("recibo-hist-v1")]).then(function(vs){
+      var cn=cult.toLowerCase(),res={};
+      // UNA MALLA = UNA TARJETA.
+      // Antes cada lote se clasificaba por su cuenta, asi que si en recibo
+      // capturaron unos lotes de la misma malla como organico y otros como
+      // convencional, la malla se partia en dos tarjetas y cada una traia un
+      // pedazo de las rejas (por eso la malla 6 salia con 49 en vez de 849:
+      // las otras 800 estaban en la tarjeta de al lado).
+      // Ahora se juntan primero por RANCHO + MALLA, se suman las rejas de cada
+      // tipo, y el tipo de la malla lo decide el que traiga MAS rejas en
+      // recibo. 6A y 6B siguen mandando sobre todo lo demas.
+      var pre={};
+      function juntar(l){
+        var ra=l.rancho||"SinRancho";
+        var m=String(l.malla||"").trim().toUpperCase();
+        var k=ra+"|"+m;
+        if(!pre[k])pre[k]={rancho:ra,malla:l.malla||"",org:0,cv:0};
+        var esOrg=!!(l.organico===true||l.organico==="si"||l.organico==="Si"||
+          String(l.tipoProd||"").toLowerCase().indexOf("org")>=0||
+          String(l.tipo||"").toLowerCase().indexOf("org")>=0);
+        if(esOrg)pre[k].org+=ni(l.cajas); else pre[k].cv+=ni(l.cajas);
+        if(l.malla)pre[k].malla=l.malla;
+      }
+      var inv=vs[0];
+      if(inv&&typeof inv==="object"){var lin=inv[cn]||{};var lts=lin.lotes||[];if(!Array.isArray(lts))lts=Object.values(lts).filter(Boolean);lts.forEach(function(l){if(!l||!l.rancho||tsISO(l.ts)!==fecha)return;if(ni(l.cajas)<=0)return;juntar(l);})}
+      var hc=vs[1];
+      if(hc){var arr=Array.isArray(hc)?hc:Object.values(hc).filter(Boolean);arr.forEach(function(h){if(!h||(h.lineaNombre||"").toLowerCase()!==cn)return;if(recISO(h)!==fecha)return;var lts2=h.lotes||[];if(!Array.isArray(lts2))lts2=Object.values(lts2).filter(Boolean);lts2.forEach(function(l){if(!l||!l.rancho)return;if(ni(l.cajas)<=0)return;juntar(l);})})}
+      var mezcladas=[];
+      Object.keys(pre).forEach(function(k){
+        var x=pre[k],tot=x.org+x.cv;
+        if(tot<=0)return;
+        if(x.org>0&&x.cv>0)mezcladas.push((x.malla||"sin malla")+" ("+
+          x.org.toLocaleString()+" org y "+x.cv.toLocaleString()+" cv)");
+        var rk=ranKey(x.rancho,x.org>=x.cv,cult,x.malla);
+        if(!res[rk])res[rk]={rejas:0,malla:""};
+        res[rk].rejas+=tot;
+        if(x.malla)res[rk].malla=x.malla;
+      });
+      // Recibo es la verdad de LO LLEGADO: trae el dia completo, no un pedazo.
+      // Antes solo se encimaban las llaves nuevas y las viejas se quedaban
+      // pegadas para siempre: por eso seguia saliendo la malla del corte de
+      // hoy en el dia de ayer aunque ya estuviera corregida la fecha.
+      // Ahora el bloque se rehace desde cero. Solo se respetan las mallas que
+      // agregaste a mano (_man). Se limpia solo, sin que tengas que borrar nada.
+      var leyo=!!(vs[0]&&typeof vs[0]==="object")||!!(vs[1]&&typeof vs[1]==="object");
+      var quitadas=0;
+      setRec(function(p){
+        var n=JSON.parse(JSON.stringify(p));
+        var prev=n[cult]||{};
+        if(!leyo){   // no se pudo leer recibo: no se toca lo que ya hay
+          Object.keys(res).forEach(function(k){prev[k]=res[k]});
+          n[cult]=prev;return n;
+        }
+        // UNA MALLA EN CERO NO SE CORTO, AUNQUE SEA TUYA.
+        // El _man servia para que el jalado no te borrara lo que tecleaste,
+        // pero se quedaba pegado para siempre: una malla agregada a mano que
+        // se quedo sin rejas seguia saliendo dia tras dia con cero (Cordillera
+        // malla 3 en Europeo). Ahora la marca solo protege lo que trae algo:
+        // rejas tecleadas, cajas de produccion, o que la acabes de agregar y
+        // todavia no alcanzas a escribir las rejas.
+        var GRACIA=20*60*1000;
+        var prdC=(prd||{})[cult]||{};
+        function manViva(k,o){
+          if(ni(o.rejas)>0)return true;            // la tecleaste tu
+          if(totLlave(prdC,k)>0)return true;       // produccion empaco de ahi
+          return (Date.now()-ni(o._ts))<GRACIA;    // apenas la agregaste
+        }
+        var nuevo={};
+        Object.keys(prev).forEach(function(k){
+          if(prev[k]&&prev[k]._man&&manViva(k,prev[k]))nuevo[k]=prev[k];
+          else if(!res[k])quitadas++;                      // era de otro dia
+        });
+        Object.keys(res).forEach(function(k){if(!nuevo[k])nuevo[k]=res[k];});
+        // Mallas que no son de ese rancho: fuera (ver MALLAS_RANCHO)
+        Object.keys(nuevo).forEach(function(k){
+          if(!nuevo[k]._man&&!mallaValida(cult,k))delete nuevo[k];
+        });
+        // Una malla sin rejas no es un corte: no se pinta. Antes salia la
+        // tarjeta vacia de una malla que ni se corto ese dia.
+        Object.keys(nuevo).forEach(function(k){
+          if(!nuevo[k])return;
+          if(ni(nuevo[k].rejas)>0)return;
+          if(nuevo[k]._man&&manViva(k,nuevo[k]))return;
+          delete nuevo[k];
+        });
+        n[cult]=nuevo;return n;
+      });
+      var nR=Object.keys(res).length;
+      setEst(function(p){return Object.assign({},p,{
+        rec:!leyo?"sin conexion":(nR>0?("OK · "+nR+" rancho(s)"):"sin captura"),recN:nR,t:Date.now()})});
+      setJal("");
+      var totRej=0;Object.keys(res).forEach(function(k){totRej+=ni(res[k].rejas);});
+      setAvisoRec({f:fecha,cult:cult,n:nR,rejas:totRej,sinSenal:!leyo,quitadas:quitadas,
+        mezcladas:mezcladas});
+      setTimeout(function(){
+        if(!leyo){fl("No se pudo leer recibo (sin senal). No se toco nada de lo que ya tenias.");return;}
+        fl(nR>0
+          ?("✓ Recibo: "+Object.keys(res).join(", ")+" · "+fecha+
+             (quitadas?"  ·  se quitaron "+quitadas+" que no eran de este dia":""))
+          :("Sin recibo para "+cult+" el "+fecha+
+             (quitadas?" · se quitaron "+quitadas+" que no eran de este dia":"")));
+      },0);
+    }).catch(function(){setJal("");setEst(function(p){return Object.assign({},p,{rec:"sin conexion"})});
+      setAvisoRec({f:fecha,cult:cult,n:0,rejas:0,sinSenal:1,quitadas:0});
+      fl("Error recibo")});
+  }
+
+  // Produccion NO guarda historial: cuando la tarima se embarca o se reprocesa,
+// desaparece. Por eso aqui se guarda copia propia y NUNCA se resta: solo se acumula.
+// Sello de la copia guardada. Si sube de version, las copias viejas se tiran
+// una vez y se rehacen solas en el siguiente jalado.
+var VER_FIX="2026-09-15-fechas";
+function capURL(f,c){return FB+"/rendimientos-captura-v1/"+String(f).replace(/-/g,"")+"/"+c+".json";}
+function esInterna(k){return String(k).charAt(0)==="_";}
+// Llaves que el usuario quito de este dia. La copia guardada NUNCA las vuelve
+// a traer. Solo regresan si produccion las vuelve a reportar VIVAS en el
+// jalado de ahorita; en ese caso dejan de estar quitadas.
+function sinQuitadas(o,del){
+  var out={};
+  Object.keys(o||{}).forEach(function(k){
+    if(esInterna(k))return;
+    if(del&&del[k])return;
+    out[k]=o[k];
+  });
+  return out;
+}
+function totLlave(o,k){
+  var t=0;Object.keys((o&&o[k])||{}).forEach(function(ci){if(ci==="malla")return;
+    Object.keys(o[k][ci]||{}).forEach(function(pr){t+=parseInt(o[k][ci][pr])||0;});});
+  return t;
+}
+// Una llave sin una sola caja no es un empaque: no se pinta.
+function sinVacias(o){
+  var out={};
+  Object.keys(o||{}).forEach(function(k){
+    if(esInterna(k))return;
+    var t=0;Object.keys(o[k]||{}).forEach(function(ci){if(ci==="malla")return;
+      Object.keys(o[k][ci]||{}).forEach(function(pr){t+=parseInt(o[k][ci][pr])||0;});});
+    if(t>0)out[k]=o[k];
+  });
+  return out;
+}
+function mergeMax(viejo,nuevo){
+  var out=JSON.parse(JSON.stringify(viejo||{}));
+  Object.keys(nuevo||{}).forEach(function(ra){
+    if(esInterna(ra))return;
+    if(!out[ra])out[ra]={};
+    Object.keys(nuevo[ra]).forEach(function(ci){
+      if(ci==="malla"){out[ra].malla=out[ra].malla||nuevo[ra].malla;return;}
+      if(!out[ra][ci])out[ra][ci]={};
+      Object.keys(nuevo[ra][ci]).forEach(function(pr){
+        var a2=parseInt(out[ra][ci][pr])||0,b2=parseInt(nuevo[ra][ci][pr])||0;
+        out[ra][ci][pr]=Math.max(a2,b2);
+      });
+    });
+  });
+  return out;
+}
+// Para el rendimiento solo cuenta lo empacado con FRUTA DEL DIA.
+// Se descarta el reproceso y la conversion hecha con fruta de dias anteriores.
+function motivoExcl(r,fec){
+  var t=String((r&&r.tipo)||"").toLowerCase().replace(/[\s_-]/g,"");
+  if(t.indexOf("reproces")>=0)return "reproceso";
+  if(t.indexOf("conversion")>=0&&t.indexOf("hoy")<0)return "conversion vieja";
+  var fo=(r&&(r.fechaOrigen||r.fechaPalletOrigen||r.fechaOrig))||"";
+  if(fo&&fo!==fec)return "pallet de otra fecha";
+  return "";
+}
+function esFrutaDelDia(r,fec){return !motivoExcl(r,fec);}
+function jPrd(fechaObj,silencioso){
+    var fec=fechaObj||prdFecha||fecha;
+    if(fec!==fecha)setAutoJala(false);
+    setShowPrdModal(false);
+    setJal("p");
+    fget("produccion-v1").then(function(data){
+      if(!data){setJal("");fl("Sin datos en produccion-v1");return}
+      var po=data[cult];if(!po){setJal("");fl("Sin datos de "+cult);return}
+      var ta=function(x){if(!x)return[];return Array.isArray(x)?x.filter(Boolean):Object.values(x).filter(Boolean)};
+      // Pallets activos (dia, embolsado, conversion_hoy)
+      var inv2=ta(po.inventario);
+      // Pallets embarcados: se mueven de inventario a registros con _descontadoPedido al cargar
+      var reg2=ta(po.registros).filter(function(r){return r&&r._descontadoPedido;});
+      // Los bajados tambien cuentan: si se embarco, se tiro o se reproceso,
+      // igual se empaco ese dia. Lo que desaparecio de TODAS las listas fue
+      // borrado por error y simplemente ya no aparece.
+      var baj2=ta(po.bajados);
+      // REGISTROS QUE NO TRAEN LA MARCA DE EMBARQUE. Solo se cuentan los que
+      // tienen _descontadoPedido, asi que un pallet que salio por otro camino
+      // se pierde en silencio. Aqui se apartan para poder ensenarlos.
+      var regSin=ta(po.registros).filter(function(r){return r&&!r._descontadoPedido;});
+      // Se marca de donde sale cada pallet para poder explicarlo despues
+      var todos=inv2.map(function(r){return {r:r,de:"inventario"}})
+        .concat(baj2.map(function(r){return {r:r,de:"bajados"}}))
+        .concat(reg2.map(function(r){return {r:r,de:"embarcado"}}));
+      var excl=0,acum={},tiposV={},fechasHay={},calsHay={},nMatch=0,exclPor={},yaVisto={},sinMapa={};
+      var porOrigen={};
+      // LO QUE NO ENTRO AL EMPAQUE DEL DIA, renglon por renglon y con su razon
+      var fuera=[];
+      function anota(r,de,razon){
+        fuera.push({de:de,razon:razon,rancho:r.rancho||"(sin rancho)",malla:r.malla||"",
+          cal:r.calidad||"(sin calidad)",pres:r.presentacion||"",cajas:ni(r.cajas)||0,
+          tipo:r.tipo||"",f:(r.fechaInventario||r.fecha||"")});
+      }
+      regSin.forEach(function(r){
+        if(!r)return;var g1=r.fechaInventario||"",g2=r.fecha||"";
+        if(g1!==fec&&g2!==fec)return;
+        anota(r,"registros","sin marca de embarque (_descontadoPedido)");
+      });
+      todos.forEach(function(_x){
+        var r=_x.r,_de=_x.de;
+        if(r){var _f1=r.fechaInventario||r.fecha||"";if(_f1)fechasHay[_f1]=(fechasHay[_f1]||0)+1;}
+        if(!r)return;var f1=r.fechaInventario||"",f2=r.fecha||"";if(f1!==fec&&f2!==fec)return;
+        var _mo=motivoExcl(r,fec);
+        if(_mo){excl++;exclPor[_mo]=(exclPor[_mo]||0)+1;anota(r,_de,_mo);return}
+        if(r.id){if(yaVisto[r.id])return;yaVisto[r.id]=1;}
+        if(ni(r.cajas)<=0){anota(r,_de,"pallet en cero cajas");return}
+        nMatch++;calsHay[String(r.calidad||"(sin calidad)")]=(calsHay[String(r.calidad||"(sin calidad)")]||0)+1;
+        var rancho=ranKey(r.rancho||"SinRancho",(r.tipoProd==="Organico"||r.organico===true),cult,r.malla);var calId=cmap[r.calidad]||null;if(!calId){var _c=String(r.calidad||"").trim().toLowerCase();Object.keys(cmap).forEach(function(k){if(!calId&&k.toLowerCase()===_c)calId=cmap[k];});}if(!calId){var _cr=String(r.calidad||"(sin calidad)");
+          sinMapa[_cr]=(sinMapa[_cr]||0)+ni(r.cajas);anota(r,_de,"calidad que la app no sabe clasificar");return;}
+        var pres=r.presentacion||"";
+        if(!acum[rancho])acum[rancho]={malla:r.malla||""};if(!acum[rancho][calId])acum[rancho][calId]={};
+        acum[rancho][calId][pres]=(ni(acum[rancho][calId][pres])||0)+ni(r.cajas);
+        var _ok=rancho+"|"+calId+"|"+pres;
+        if(!porOrigen[_ok])porOrigen[_ok]={inventario:0,bajados:0,embarcado:0};
+        porOrigen[_ok][_de]+=ni(r.cajas);
+        var t=r.tipo||"dia";tiposV[t]=(tiposV[t]||0)+1;
+      });
+      setCalsRaras(Object.keys(sinMapa).length?{f:fec,cult:cult,cals:sinMapa}:null);
+      var _u=capURL(fec,cult);
+      fetch(_u+"?t="+Date.now()).then(function(r){return r.json();}).catch(function(){return null;})
+       .then(function(prev){
+         // La copia guardada por una version ANTERIOR al arreglo de fechas
+         // puede traer fruta de otro dia, y mergeMax nunca resta. Se tira una
+         // sola vez, sola, y se rehace con el jalado bueno. No hay que borrar
+         // nada a mano.
+         prev=prev||{};
+         var sello=prev._v;delete prev._v;
+         // TRAZABILIDAD MANDA. Si este dia se cargo con el reporte de
+         // trazabilidad, produccion NO lo pisa: ese reporte es la verdad.
+         var esTrz=!!prev._trz; delete prev._trz;
+         var quitadasG=Object.assign({},prev._del||{},(delDia&&delDia[cult])||{});
+         delete prev._del;
+         setDelDia(function(p){var n=JSON.parse(JSON.stringify(p||{}));n[cult]=quitadasG;return n;});
+         if(sello!==VER_FIX){prev={};}
+         // La copia guardada puede traer llaves con el tipo viejo. Se corrigen
+         // ANTES de fusionar, si no la llave mala regresa en cada jalado.
+         var prevF=fixLlaves(prev,cult),acumF=fixLlaves(acum,cult);
+         // Si produccion vuelve a reportar viva una llave que estaba quitada,
+         // deja de estar quitada: el dato nuevo manda.
+         Object.keys(quitadasG).forEach(function(k){
+           if(totLlave(acumF,k)>0)delete quitadasG[k];
+         });
+         // LO VIVO MANDA. La copia guardada solo sirve cuando produccion no
+         // trajo nada (sin senal); si produccion contesta, se usa tal cual.
+         // Antes se fusionaba y por eso las llaves viejas nunca se iban.
+         var vivoHay=Object.keys(acumF||{}).length>0;
+         var basef=esTrz?prevF:(vivoHay?acumF:prevF);
+         var fus=sinVacias(sinQuitadas(basef,quitadasG));
+         Object.keys(fus).forEach(function(k){if(!mallaValida(cult,k))delete fus[k];});
+         setTrz(esTrz?{f:fec,cult:cult}:null);
+         // Foto de por que cada cifra quedo como quedo. Sirve para explicar
+         // las diferencias contra lo que tiene capturado produccion.
+         setOrigenPrd({f:fec,cult:cult,vivo:acumF,copia:prevF,queda:fus,porOrigen:porOrigen,fuera:fuera,
+           conteo:{inventario:inv2.length,bajados:baj2.length,embarcado:reg2.length,registrosSinMarca:regSin.length}});
+         setPrd(function(p){
+           var n=JSON.parse(JSON.stringify(p));
+           // Si el jalado no trajo nada y en pantalla YA hay datos (por ejemplo
+           // porque se jalo otro dia a proposito), no se pisa con el vacio.
+           var hayFus=Object.keys(fus||{}).length>0;
+           var hayAnt=Object.keys(n[cult]||{}).length>0;
+           if(!hayFus&&hayAnt)return p;
+           n[cult]=fus;return n});
+         fetch(_u,{method:"PUT",headers:{"Content-Type":"application/json"},
+           body:JSON.stringify(Object.assign({},fus,{_v:VER_FIX,_del:quitadasG},esTrz?{_trz:1}:{}))}).catch(function(){});
+       });
+      setJal("");
+      var presL=[];Object.values(acum).forEach(function(rc){Object.keys(rc).forEach(function(ci){if(ci==="malla")return;Object.keys(rc[ci]).forEach(function(p){if(presL.indexOf(p)<0)presL.push(p)})})});
+      var nP=Object.keys(acum).length;
+      setEst(function(p){return Object.assign({},p,{prd:nP>0?("OK · "+nP+" rancho(s)"):"sin captura",prdN:nP,t:Date.now()})});
+      if(nP===0&&!silencioso){
+        var fl2=Object.keys(fechasHay).sort().slice(-12);
+        setDiag("NO se encontro nada de "+cult+" con fecha "+fec+". Registros revisados: "+todos.length+
+          ". Coincidieron por fecha: "+nMatch+
+          ". Calidades vistas: "+(Object.keys(calsHay).join(", ")||"ninguna")+
+          ". Fechas que SI existen: "+(fl2.join(" | ")||"ninguna"));
+      } else { setDiag(""); }
+      var det=Object.keys(exclPor).map(function(k){return k+" "+exclPor[k];}).join(", ");
+      fl("Prod "+fec+": "+Object.keys(acum).length+" rancho(s) - "+(presL.join(", ")||"ninguna")+(excl?"  |  FUERA "+excl+" ("+det+")":"  |  nada excluido"));
+    }).catch(function(){setJal("");fl("Error produccion")});
+  }
+
+  function totCaj(o){
+    var t=0;
+    Object.keys(o||{}).forEach(function(ra){
+      Object.keys(o[ra]||{}).forEach(function(ci){
+        if(ci==="malla")return;
+        Object.keys(o[ra][ci]||{}).forEach(function(pr){t+=parseInt(o[ra][ci][pr])||0;});});});
+    return t;
+  }
+  function VigBox(){
+    if(!vigMsg)return null;
+    return React.createElement("div",{style:{display:"flex",alignItems:"center",gap:7,background:"rgba(34,197,94,.07)",
+      border:"1px solid rgba(34,197,94,.25)",borderRadius:8,padding:"7px 11px",margin:"8px 0",fontSize:10.5,color:"#4ade80",fontWeight:700}},
+      React.createElement("span",{style:{width:7,height:7,borderRadius:"50%",background:"#22c55e",display:"inline-block"}}),
+      vigMsg);
+  }
+  function AjusteBox(){
+    var g=(prd||{})[cult]||{}, v=(prdLive||{})[cult]||{};
+    var labs={};(CLABS[cult]||[]).forEach(function(x){labs[x.id]=x.l;});
+    var difs=[];
+    Object.keys(g).forEach(function(ra){
+      Object.keys(g[ra]||{}).forEach(function(ci){
+        if(ci==="malla")return;
+        Object.keys(g[ra][ci]||{}).forEach(function(pr){
+          var a=parseInt(g[ra][ci][pr])||0;
+          var b=parseInt(((v[ra]||{})[ci]||{})[pr])||0;
+          if(a>b)difs.push({ra:ra,ci:ci,pr:pr,cap:a,viv:b,lab:labs[ci]||ci});
+        });
+      });
+    });
+    if(!difs.length)return null;
+    return React.createElement("div",{style:{background:"rgba(251,191,36,.08)",border:"1px solid rgba(251,191,36,.35)",
+      borderRadius:9,padding:"11px 13px",margin:"10px 0",fontSize:11,color:"#fbbf24",lineHeight:1.6}},
+      React.createElement("div",{style:{fontWeight:900,marginBottom:7,letterSpacing:.5}},"DIFERENCIAS CONTRA PRODUCCION"),
+      React.createElement("div",{style:{color:"#9a8a5a",marginBottom:9,fontSize:10}},
+        "Si ya se embarcaron, dejalo asi. Si alguien borro por error, ajusta SOLO el renglon que corresponda."),
+      difs.map(function(d,i){
+        return React.createElement("div",{key:i,style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",
+          padding:"6px 0",borderTop:i?"1px solid rgba(251,191,36,.15)":"none"}},
+          React.createElement("span",{style:{color:"#fde68a",fontWeight:800,minWidth:92}},d.ra),
+          React.createElement("span",{style:{color:"#fbbf24",fontWeight:700}},d.lab),
+          React.createElement("span",{style:{color:"#9a8a5a"}},d.pr),
+          React.createElement("span",{style:{marginLeft:"auto",fontFamily:"'DM Mono',monospace",color:"#e5e7eb",fontWeight:900}},
+            d.cap+" aqui / "+d.viv+" en produccion"),
+          React.createElement("button",{onClick:function(){
+              if(!window.confirm("Dejar "+d.viv+" cajas en "+d.ra+" - "+d.lab+" - "+d.pr+"?"))return;
+              setPrd(function(pp){
+                var n5=JSON.parse(JSON.stringify(pp||{}));
+                if(!n5[cult])n5[cult]={};
+                if(!n5[cult][d.ra])n5[cult][d.ra]={};
+                if(!n5[cult][d.ra][d.ci])n5[cult][d.ra][d.ci]={};
+                if(d.viv>0)n5[cult][d.ra][d.ci][d.pr]=d.viv; else delete n5[cult][d.ra][d.ci][d.pr];
+                fetch(capURL(fecha,cult),{method:"PUT",headers:{"Content-Type":"application/json"},
+                  body:JSON.stringify(Object.assign({},n5[cult],{_v:VER_FIX}))}).catch(function(){});
+                return n5;
+              });
+            },style:{padding:"4px 11px",background:"rgba(251,191,36,.16)",border:"1px solid rgba(251,191,36,.5)",
+              borderRadius:6,color:"#fbbf24",fontSize:10,fontWeight:800,cursor:"pointer",fontFamily:"inherit"}},"Ajustar")
+        );
+      })
+    );
+  }
+  function DiagBox(){
+    if(!diag)return null;
+    // Solo sale cuando TU le das a jalar y no encuentra nada. El jalado
+    // automatico ya no lo pinta, y se puede cerrar con la x.
+    return (
+      <div style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.35)",
+        borderRadius:8,padding:"10px 12px",margin:"10px 0",fontSize:11,color:"#fca5a5",
+        lineHeight:1.6,wordBreak:"break-word",display:"flex",gap:8,alignItems:"flex-start"}}>
+        <span style={{flex:1}}>{diag}</span>
+        <button onClick={function(){setDiag("")}}
+          style={{background:"none",border:"none",color:"#fca5a5",fontWeight:900,
+            fontSize:14,cursor:"pointer",lineHeight:1,padding:0}}>x</button>
+      </div>
+    );
+  }
+  // Vigilancia cada 20 s. Sigue PALLET POR PALLET, no totales.
+  // Un pallet que ya no esta en inventario pero SI aparece en bajados se
+  // conserva: se embarco, se tiro o se reproceso, pero si se empaco ese dia.
+  // Un pallet que desaparecio de los dos lados fue borrado por error y se quita.
+  uE(function(){
+    if(!auth)return;
+    var vivo=true;
+    function vigilar(){
+      fget("produccion-v1").then(function(data){
+        if(!vivo||!data)return;
+        var ta=function(x){if(!x)return[];return Array.isArray(x)?x.filter(Boolean):Object.values(x).filter(Boolean)};
+        var mapas={},totV=0;
+        CULTS.forEach(function(cu){
+          var po=data[cu];if(!po)return;
+          var enInv=ta(po.inventario);
+          var enBaj=ta(po.bajados);
+          var enReg=ta(po.registros).filter(function(r){return r&&r._descontadoPedido;});
+          var vistos={};
+          [enInv,enBaj,enReg].forEach(function(lista){
+            lista.forEach(function(r){
+              if(!r||!r.id)return;
+              var f1=r.fechaInventario||"",f2=r.fecha||"";
+              if(f1!==fecha&&f2!==fecha)return;
+              if(!esFrutaDelDia(r,fecha))return;
+              var cmap2=CMAP[cu]||{};
+              var ci=cmap2[r.calidad]||null;
+              if(!ci){var _c=String(r.calidad||"").trim().toLowerCase();
+                Object.keys(cmap2).forEach(function(k){if(!ci&&k.toLowerCase()===_c)ci=cmap2[k];});}
+              if(!ci)return;
+              var ra=ranKey(r.rancho||"SinRancho",(r.tipoProd==="Organico"||r.organico===true),cu,r.malla);
+              // el mismo pallet puede estar en inventario y en bajados partido:
+              // se toma el mayor de los dos para no perder ni duplicar
+              var prev=vistos[r.id];
+              var cj=parseInt(r.cajas)||0;
+              if(!prev||cj>prev.cajas)vistos[r.id]={ra:ra,ci:ci,pres:r.presentacion||"",cajas:cj,malla:r.malla||""};
+            });
+          });
+          mapas[cu]=vistos;
+          Object.keys(vistos).forEach(function(k){totV+=vistos[k].cajas;});
+        });
+        var hh=new Date();
+        setVigMsg("Ultima revision "+("0"+hh.getHours()).slice(-2)+":"+("0"+hh.getMinutes()).slice(-2)+":"+("0"+hh.getSeconds()).slice(-2)+
+          " - "+totV.toLocaleString()+" cajas del dia (incluye lo ya embarcado)");
+        setPrdLive(function(){return JSON.parse(JSON.stringify(mapas));});
+        setPrd(function(pAnt){
+          var n2=JSON.parse(JSON.stringify(pAnt||{}));var cambio=false;
+          CULTS.forEach(function(cu){
+            var m=mapas[cu];
+            if(!m||!Object.keys(m).length)return;
+            var acum={};
+            Object.keys(m).forEach(function(id){
+              var x=m[id];
+              if(!acum[x.ra])acum[x.ra]={malla:x.malla||""};
+              if(!acum[x.ra][x.ci])acum[x.ra][x.ci]={};
+              acum[x.ra][x.ci][x.pres]=(parseInt(acum[x.ra][x.ci][x.pres])||0)+x.cajas;
+            });
+            if(JSON.stringify(acum)===JSON.stringify(n2[cu]||{}))return;
+            n2[cu]=acum;cambio=true;
+            fetch(capURL(fecha,cu),{method:"PUT",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify(Object.assign({},acum,{_v:VER_FIX}))}).catch(function(){});
+          });
+          return cambio?n2:pAnt;
+        });
+      }).catch(function(){});
+    }
+    vigilar();
+    var t=setInterval(vigilar,20000);
+    return function(){vivo=false;clearInterval(t);};
+  },[auth,fecha]);
+
+  // Corrige llaves ya guardadas con el tipo equivocado (ej. "Cordillera CV"
+  // en Slicer, que siempre es organico). Suma lo de la llave vieja a la buena.
+  function fixLlaves(obj,cu){
+    var out={};
+    Object.keys(obj||{}).forEach(function(k){
+      var pk=partesLlave(k);
+      var nk2=pk.tipo?ranKey(pk.rancho,pk.tipo==="ORG",cu,pk.malla):k;
+      if(!out[nk2]){out[nk2]=JSON.parse(JSON.stringify(obj[k]));return;}
+      // fusionar: rejas se suman, y las cajas por calidad y presentacion tambien
+      var a2=out[nk2],b2=obj[k];
+      Object.keys(b2||{}).forEach(function(kk){
+        if(kk==="rejas"){a2.rejas=(ni(a2.rejas)||0)+(ni(b2.rejas)||0);return;}
+        if(kk==="malla"){a2.malla=a2.malla||b2.malla;return;}
+        if(!a2[kk]){a2[kk]=JSON.parse(JSON.stringify(b2[kk]));return;}
+        if(typeof b2[kk]==="object"){
+          Object.keys(b2[kk]).forEach(function(pp2){
+            a2[kk][pp2]=(ni(a2[kk][pp2])||0)+(ni(b2[kk][pp2])||0);
+          });
+        }
+      });
+    });
+    return out;
+  }
+  var calcs=uM(function(){
+    var recC=fixLlaves(rec[cult]||{},cult),prdC=fixLlaves(prd[cult]||{},cult),rset={};
+    Object.keys(recC).forEach(function(r){rset[r]=true});
+    Object.keys(prdC).forEach(function(r){if(r!=="malla")rset[r]=true});
+    // ranchos con rejas capturadas a mano, aunque el recibo no haya traido nada
+
+    var res={};
+    Object.keys(rset).forEach(function(rancho){
+      var rv=recC[rancho]||{},pv=prdC[rancho]||{};
+      var rejas=ni(rv.rejas)||0,pr=nf(gi(rancho,"pesoReja"))||0,pzr=nf(gi(rancho,"piezasReja"))||0;
+      var kgRec=r2(rejas*pr),pzRec=Math.round(rejas*pzr),pp=pzRec>0?kgRec/pzRec:0;
+      var det={},tot=0,totPz=0,totCj=0,sinPeso=[],faltaPz=[];
+      var esEuro=(cult==="Europeo"),esSli=(cult==="Slicer");
+      var mv=(man[cult]||{})[rancho]||{};
+      cals.forEach(function(cal){
+        var pa=pv[cal.id]||{},ma=mv[cal.id]||{},kgC=0,pzC=0,cjC=0,dsg={};
+        // Se recorren las presentaciones de produccion MAS las que solo
+        // existen como ajuste a mano.
+        var todasP={};
+        Object.keys(pa).forEach(function(p){todasP[p]=1;});
+        Object.keys(ma).forEach(function(p){todasP[p]=1;});
+        Object.keys(todasP).forEach(function(pres){var cajas=Math.max(0,ni(pa[pres])+ni(ma[pres])),kgP=0,pzP=0;var kc=kgPres(pres,cult),pzc=pzPres(pres,cult);if(cult==="Slicer"&&pzc){pzP=cajas*pzc;kgP=pzP*KG_PZ_SLICER}else if(kc!==null){kgP=cajas*kc}else if(pzc){pzP=cajas*pzc;kgP=pzP*pp;if(!esEuro&&cajas>0&&pp<=0&&faltaPz.indexOf(pres)<0)faltaPz.push(pres)}else if(cajas>0&&sinPeso.indexOf(pres)<0){sinPeso.push(pres)}
+          var cjP=esSli?cajas*cj36(pres):0;
+          if(esSli&&cajas>0&&cj36(pres)===0&&sinPeso.indexOf(pres)<0)sinPeso.push(pres);
+          kgC+=kgP;pzC+=pzP;cjC+=cjP;if(cajas>0)dsg[pres]={cajas:cajas,kg:r2(kgP),pz:pzP,cj:r2(cjP)}});
+        det[cal.id]={kg:r2(kgC),pz:pzC,cj:r2(cjC),dsg:dsg};tot+=kgC;totPz+=pzC;totCj+=cjC;
+      });
+      tot=r2(tot);totCj=r2(totCj);
+      // Europeo va en PIEZAS. Slicer va en CAJAS DE 36 CT. Los demas en kilos.
+      // Lo recibido de Slicer: si hay piezas por reja se usan (entre 36); si no,
+      // los kilos por reja entre 9.72, que es lo que pesa la caja de 36 CT.
+      var recSli=pzRec>0?(pzRec/36):(kgRec/(36*KG_PZ_SLICER));
+      var bRec=esEuro?pzRec:(esSli?r2(recSli):kgRec);
+      var bEmp=esEuro?totPz:(esSli?totCj:tot);
+      var bM=r2(bRec-bEmp);
+      res[rancho]={malla:rv.malla||pv.malla||"",rejas:rejas,pesoReja:pr,
+        kgRec:bRec,kgEmp:bEmp,kgM:bM,pctM:pc(bM,bRec),
+        u:esEuro?"pzas":(esSli?"cj 36CT":"kg"),esEuro:esEuro,esSli:esSli,
+        sinPeso:sinPeso,faltaPz:faltaPz,
+        fRend:bRec>0?Math.round(bEmp/bRec*1000)/10:0,det:det};
+    });
+    return res;
+  },[rec,prd,inp,cult,fecha]);
+
+  var activos=Object.keys(calcs).filter(function(r){return calcs[r].kgRec>0||calcs[r].kgEmp>0});
+  // Se suma todo el dia: el total general y, aparte, cada malla por su lado.
+  var resumen=uM(function(){
+    var g={},tot={rec:0,emp:0,det:{},rejas:0},u="kg",esE=false;
+    activos.forEach(function(k){
+      var pk=partesLlave(k),d=calcs[k];
+      var m=(pk.malla||d.malla||"").trim()||"Sin malla";
+      u=d.u||u; esE=!!d.esEuro;
+      if(!g[m])g[m]={rec:0,emp:0,det:{},rejas:0,ranchos:[]};
+      g[m].rec+=d.kgRec||0; g[m].emp+=d.kgEmp||0; g[m].rejas+=d.rejas||0;
+      if(g[m].ranchos.indexOf(pk.rancho+" "+pk.tipo)<0)g[m].ranchos.push(pk.rancho+" "+pk.tipo);
+      tot.rec+=d.kgRec||0; tot.emp+=d.kgEmp||0; tot.rejas+=d.rejas||0;
+      cals.forEach(function(cal){
+        var _d=d.det[cal.id]||{};
+        var v=valCal(d,_d);
+        g[m].det[cal.id]=(g[m].det[cal.id]||0)+v;
+        tot.det[cal.id]=(tot.det[cal.id]||0)+v;
+      });
+    });
+    return {g:g,tot:tot,u:u,esEuro:esE,mallas:Object.keys(g).sort()};
+  },[activos,calcs,cult,cals]);
+  // Que numero representa a cada calidad segun el cultivo
+  function valCal(d,_d){
+    if(!_d)return 0;
+    if(d.esEuro)return _d.pz||0;
+    if(d.esSli)return _d.cj||0;
+    return _d.kg||0;
+  }
+  // "Cordillera ORG M3" se parte para no imprimir la malla dos veces
+  function nomLlave(k){var p=partesLlave(k);return p.tipo?(p.rancho+" "+p.tipo):k;}
+  function mallaLlave(k){var p=partesLlave(k);return p.malla||"";}
+  function segsDe(o,base){
+    var segs=[],sum=0;
+    cals.forEach(function(cal){
+      var v=(o.det||{})[cal.id]||0;
+      if(v>0){segs.push({l:cal.l,c:cal.c,v:v});sum+=v;}
+    });
+    // La merma se guarda con su signo. Si se empaco MAS de lo que llego sale
+    // negativa (en ambar) y asi las calidades + la merma siempre dan 100%
+    // sobre lo que llego. Ningun porcentaje se saca sobre lo empacado.
+    var mer=r2((base||0)-sum);
+    if(mer!==0)segs.push({l:"Merma",c:mer<0?"#fbbf24":"#ef4444",v:mer});
+    return segs;
+  }
+  var hayD=activos.length>0;
+  // Mallas con rejas capturadas pero SIN el dato que las convierte: esas no
+  // estan entrando a lo llegado. Se avisan por nombre y con sus rejas, porque
+  // el error no se ve en pantalla (el total de rejas si las incluye).
+  var mallasMudas=uM(function(){
+    var out=[],esE=(cult==="Europeo"),esS=(cult==="Slicer");
+    Object.keys(rec[cult]||{}).forEach(function(k){
+      if(k==="_nuevo")return;
+      var rj=ni((rec[cult][k]||{}).rejas)||0;
+      if(rj<=0)return;
+      var pr=nf(gi(k,"pesoReja"))||0,pz=nf(gi(k,"piezasReja"))||0;
+      var falta=esE?(pz<=0):(esS?(pz<=0&&pr<=0):(pr<=0));
+      if(falta)out.push({k:k,rejas:rj,
+        malla:mallaLlave(k)||((rec[cult][k]||{}).malla||""),
+        pide:esE?"Pzas/reja":(esS?"Kg/reja o Pzas/reja":"Kg/reja")});
+    });
+    return out;
+  },[rec,inp,cult]);
+
+  // Lo que se descarto por no cuadrar rancho-malla, para que se vea
+  var mallasRaras=uM(function(){
+    var out=[],vis={};
+    [rec[cult]||{},prd[cult]||{}].forEach(function(o){
+      Object.keys(o).forEach(function(k){
+        if(k==="_nuevo"||k==="malla")return;
+        if(mallaValida(cult,k)||vis[k])return;
+        vis[k]=1;out.push(k);
+      });
+    });
+    return out;
+  },[rec,prd,cult]);
+
+  /* ALARMA DE INCONGRUENCIA (Miguel, 24 sep 2026)
+     Las rejas salen SOLO de recibo de fruta y las cajas SOLO de produccion.
+     Cuando una malla aparece en una captura y no en la otra, alguna de las
+     dos esta mal y hay que ir a corregirla. Antes esto se veia como una
+     tarjeta rara con ceros y habia que adivinar. Ahora se grita. */
+  var incong=uM(function(){
+    var sinRec=[],sinPrd=[];
+    var R=rec[cult]||{},P=prd[cult]||{},ks={};
+    Object.keys(R).forEach(function(k){if(!esInterna(k)&&k!=="_nuevo")ks[k]=1});
+    Object.keys(P).forEach(function(k){if(!esInterna(k)&&k!=="malla"&&k!=="_nuevo")ks[k]=1});
+    Object.keys(ks).forEach(function(k){
+      if(!mallaValida(cult,k))return;          // esas ya se avisan aparte
+      var rj=ni((R[k]||{}).rejas)||0, cj=totLlave(P,k);
+      if(cj>0&&rj<=0)sinRec.push({k:k,n:cj});
+      else if(rj>0&&cj<=0)sinPrd.push({k:k,n:rj});
+    });
+    return {sinRec:sinRec,sinPrd:sinPrd,hay:sinRec.length+sinPrd.length};
+  },[rec,prd,cult]);
+
+  function guardar(){
+    if(!auth){setSp(true);return}
+    setGrd(true);
+    var e={fecha:fecha,cult:cult,ts:Date.now(),ranchos:{}};
+    activos.forEach(function(r){e.ranchos[r]=calcs[r]});
+    // Se guarda el REPORTE COMPLETO tal como se ve en pantalla. Produccion no
+    // deja copia de lo empacado de ese dia, asi que despues ya no se puede
+    // volver a armar: la unica forma de consultarlo igualito es congelarlo.
+    try{
+      var _el=document.getElementById("reporte");
+      if(_el){
+        var _c=_el.cloneNode(true);
+        _c.removeAttribute("id");
+        [].slice.call(_c.querySelectorAll("[data-nofoto]")).forEach(function(n){
+          if(n.parentNode)n.parentNode.removeChild(n);});
+        var _h=_c.outerHTML;
+        if(_h&&_h.length<900000)e.rep=_h;   // por si sale gigante, no se guarda
+      }
+    }catch(eRep){}
+    var k="rendimientos-hist-v1/"+fecha.replace(/-/g,"")+"/"+cult;
+    fput(k,e).then(function(ok){
+      if(!ok){
+        setGrd(false);
+        fl("✗ NO se guardó. Revisa la señal y vuelve a intentar. Tu captura sigue aquí.");
+        return;
+      }
+      setHist(function(p){var n=JSON.parse(JSON.stringify(p));var dk=fecha.replace(/-/g,"");if(!n[dk])n[dk]={};n[dk][cult]=e;return n});
+      setRec({});setPrd({});setInp({});
+      try{localStorage.removeItem(llaveDia(fecha))}catch(ex){}
+      setGrd(false);fl("✓ Guardado. Listo para el siguiente día.");
+    });
+  }
+
+  var diasH=uM(function(){
+    var keys=Object.keys(hist).sort(function(a,b){return b>a?1:-1}).slice(0,14);
+    return keys.map(function(dk){var d=hist[dk];if(!d||!d[cult])return null;return{fec:(d[cult].fecha||dk.slice(0,4)+"-"+dk.slice(4,6)+"-"+dk.slice(6,8)),ranchos:d[cult].ranchos||{}}}).filter(Boolean);
+  },[hist,cult]);
+
+  var INP={background:"rgba(255,255,255,.06)",border:"1px solid rgba(255,255,255,.1)",borderRadius:6,padding:"5px 8px",color:"#e0ead0",fontSize:13,fontFamily:"'DM Mono',monospace",textAlign:"center",outline:"none"};
+  var TH={padding:"4px 5px",textAlign:"right",fontSize:9,color:"#4a6a3a",fontWeight:700,letterSpacing:.5};
+  var TD=function(ex){return Object.assign({padding:"6px 5px",textAlign:"right",borderBottom:"1px solid rgba(255,255,255,.04)",verticalAlign:"middle"},ex||{})};
+
+  // Dona reutilizable: el numero grande de en medio es el rendimiento.
+  function Dona(p){
+    var segs=(p.segs||[]).filter(function(x){return x.v>0}),R=p.r||52,SW=p.sw||26,S=Math.round((R+SW/2+6)*2);
+    var tot=segs.reduce(function(t,x){return t+x.v},0)||1;
+    var C=2*Math.PI*R,off=0;
+    return (
+      <svg width={S} height={S} viewBox={"0 0 "+S+" "+S} style={{flex:"none"}}>
+        <circle cx={S/2} cy={S/2} r={R} fill="none" stroke="rgba(255,255,255,.05)" strokeWidth={SW}/>
+        {segs.map(function(x,i){
+          var dash=C*(x.v/tot);
+          var el=(<circle key={i} cx={S/2} cy={S/2} r={R} fill="none" stroke={x.c} strokeWidth={SW}
+            strokeDasharray={dash+" "+(C-dash)} strokeDashoffset={-off}
+            transform={"rotate(-90 "+(S/2)+" "+(S/2)+")"}/>);
+          off+=dash;return el;
+        })}
+        <text x={S/2} y={S/2+R*0.12} textAnchor="middle" fill="#a8e063"
+          fontSize={Math.round(R*0.46)} fontWeight="900" fontFamily="'DM Mono',monospace">{p.pct}%</text>
+        <text x={S/2} y={S/2+R*0.44} textAnchor="middle" fill="#4a6a3a"
+          fontSize={Math.round(R*0.19)} fontWeight="700" letterSpacing="1">RENDIM.</text>
+      </svg>
+    );
+  }
+  function Cifra(p){
+    return (
+      <div style={{minWidth:p.min||96}}>
+        <div style={{fontSize:9,color:"#4a6a3a",fontWeight:700,letterSpacing:1.4,
+          textTransform:"uppercase",marginBottom:2}}>{p.t}</div>
+        <div style={{fontSize:p.big?30:20,fontWeight:900,lineHeight:1,
+          color:p.c||"#e0ead0",fontFamily:"'DM Mono',monospace"}}>{p.v}</div>
+        {p.s&&<div style={{fontSize:10,color:"#4a6a3a",marginTop:3}}>{p.s}</div>}
+      </div>
+    );
+  }
+  // Reparto en porcentaje sobre lo que llego. Mismo formato en el general y
+  // en cada malla, para que se lean igual.
+  function Repartos(p){
+    var segs=p.segs||[],base=p.base||0,big=!!p.big;
+    if(!segs.length||base<=0)return null;
+    return (
+      <div>
+        <div style={{fontSize:big?10:9,color:"#6a8a6a",fontWeight:800,letterSpacing:.7,
+          marginTop:big?11:8,textTransform:"uppercase"}}>% sobre lo que llego</div>
+        <div style={{display:"flex",gap:big?9:7,flexWrap:"wrap",marginTop:big?6:5,
+          paddingTop:big?8:6,borderTop:"1px solid rgba(255,255,255,.09)"}}>
+        {segs.map(function(x,i){
+          return (
+            <div key={i} style={{flex:big?"1 1 104px":"1 1 86px",background:"rgba(0,0,0,.28)",
+              borderTop:"3px solid "+x.c,borderRadius:"0 0 7px 7px",padding:big?"7px 9px":"5px 7px"}}>
+              <div style={{fontSize:big?10:9,color:"#7a9a6a",fontWeight:700,
+                letterSpacing:.4,marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",
+                textOverflow:"ellipsis"}}>{x.l}</div>
+              <div style={{fontSize:big?22:16,fontWeight:900,lineHeight:1,color:x.c,
+                fontFamily:"'DM Mono',monospace"}}>{pc(x.v,base)}%</div>
+              <div style={{fontSize:big?10:9,color:"#4a6a3a",marginTop:2,
+                fontFamily:"'DM Mono',monospace"}}>{Math.round(x.v).toLocaleString()} {p.u}</div>
+            </div>
+          );
+        })}
+        </div>
+      </div>
+    );
+  }
+  function Btn(p){return <button onClick={p.onClick} disabled={p.dis} style={{background:p.bg||"rgba(255,255,255,.07)",border:"1px solid "+(p.bc||"rgba(255,255,255,.12)"),borderRadius:8,padding:"8px 14px",color:p.col||"#e0ead0",fontWeight:700,fontSize:12,cursor:p.dis?"not-allowed":"pointer",opacity:p.dis?.5:1,transition:"all .15s"}}>{p.children}</button>}
+
+  return(
+    <div style={{minHeight:"100vh",background:"#07100a"}}>
+      <datalist id="presPV">
+        {presVistas().map(function(p){return <option key={p} value={p}/>})}
+      </datalist>
+
+      {/* HEADER */}
+      <div style={{background:"linear-gradient(135deg,#051a09,#0a2e12)",padding:"11px 14px",borderBottom:"1px solid rgba(74,222,128,.1)",position:"sticky",top:0,zIndex:10,boxShadow:"0 2px 10px rgba(0,0,0,.5)"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:7,marginBottom:8}}>
+          <div>
+            <div style={{fontSize:9,color:"#4a8a5a",fontWeight:700,letterSpacing:3,textTransform:"uppercase"}}>Parras Valley Tomatoes</div>
+            <div style={{fontSize:16,fontWeight:900,color:"#a8e063"}}>Control General de Rendimientos</div>
+          </div>
+          <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap"}}>
+            <input type="date" value={fecha} onChange={function(e){setFecha(e.target.value)}} style={Object.assign({},INP,{width:"auto"})}/>
+            {fecha!==hoy()&&(
+              <button onClick={function(){setFecha(hoy())}}
+                style={{background:"rgba(255,255,255,.07)",border:"1px solid rgba(255,255,255,.15)",
+                  borderRadius:7,color:"#c0d0a0",fontWeight:800,fontSize:10.5,padding:"6px 11px",
+                  cursor:"pointer",fontFamily:"inherit"}}>IR A HOY</button>
+            )}
+            {auth?<span style={{fontSize:10,color:"#4ade80",fontWeight:700}}>Editor</span>
+              :<Btn onClick={function(){setSp(true)}} bg="rgba(74,222,128,.08)" bc="rgba(74,222,128,.2)" col="#4ade80">Editar</Btn>}
+          </div>
+        </div>
+        {/* Que dia estas viendo. Sin esto no se distingue el corte de hoy del
+            de ayer y todo lo que salga en pantalla parece un error. */}
+        {(function(){
+          var esHoy=(fecha===hoy());
+          var L=["domingo","lunes","martes","miercoles","jueves","viernes","sabado"];
+          var MM=["enero","febrero","marzo","abril","mayo","junio","julio","agosto",
+                  "septiembre","octubre","noviembre","diciembre"];
+          var pa=String(fecha).split("-");
+          var txt=fecha;
+          if(pa.length===3){
+            var d=new Date(+pa[0],+pa[1]-1,+pa[2]);
+            if(!isNaN(d))txt=L[d.getDay()]+" "+(+pa[2])+" de "+MM[+pa[1]-1];
+          }
+          return (
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",
+              background:esHoy?"rgba(74,222,128,.08)":"rgba(251,191,36,.12)",
+              border:"1px solid "+(esHoy?"rgba(74,222,128,.22)":"rgba(251,191,36,.45)"),
+              borderRadius:8,padding:"6px 11px",marginBottom:8}}>
+              <span style={{fontSize:9,fontWeight:900,letterSpacing:1.6,textTransform:"uppercase",
+                color:esHoy?"#4a8a5a":"#9a8a5a"}}>Estas viendo el corte del</span>
+              <span style={{fontSize:14,fontWeight:900,color:esHoy?"#4ade80":"#fbbf24"}}>{txt}</span>
+              <span style={{fontSize:10,fontWeight:800,color:esHoy?"#4a8a5a":"#fbbf24"}}>
+                {esHoy?"· HOY":"· NO es hoy"}
+              </span>
+            </div>
+          );
+        })()}
+        <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+          {CULTS.map(function(c){var on=cult===c;return <button key={c} onClick={function(){setCult(c)}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid "+(on?"#4ade80":"rgba(255,255,255,.08)"),background:on?"rgba(74,222,128,.1)":"transparent",color:on?"#4ade80":"#6a7a5a",fontSize:12,fontWeight:700,cursor:"pointer"}}>{c}</button>})}
+          <div style={{flex:1}}/>
+          {["cap","his","evo"].map(function(t){var on=tab===t;return <button key={t} onClick={function(){setTab(t)}} style={{padding:"4px 10px",borderRadius:6,border:"1px solid "+(on?"rgba(74,222,128,.5)":"rgba(255,255,255,.08)"),background:on?"rgba(74,222,128,.08)":"transparent",color:on?"#4ade80":"#6a7a5a",fontSize:11,fontWeight:700,cursor:"pointer"}}>{t==="cap"?"Captura":(t==="his"?"Historial":"Evolución")}</button>})}
+        </div>
+      </div>
+
+      {!!msg&&<div style={{background:"rgba(74,222,128,.08)",borderBottom:"1px solid rgba(74,222,128,.15)",padding:"6px 14px",fontSize:11,color:"#4ade80",fontWeight:600}}>{msg}</div>}
+
+      {/* PIN */}
+      {sp&&(
+        <div onClick={function(e){if(e.target===e.currentTarget)setSp(false)}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"#0f1f0a",border:"1px solid rgba(74,222,128,.3)",borderRadius:12,padding:"24px 20px",minWidth:220,textAlign:"center"}}>
+            <div style={{fontWeight:800,color:"#a8e063",marginBottom:11,fontSize:13}}>Acceso Editor</div>
+            <input type="password" value={pin} onChange={function(e){setPin(e.target.value)}} onKeyDown={function(e){if(e.key==="Enter"&&pin===PIN){setAuth(true);setSp(false);setPin("");fl("✓ Acceso concedido")}}} placeholder="PIN" style={Object.assign({},INP,{width:"100%",fontSize:18,marginBottom:9,textAlign:"center"})}/>
+            <Btn onClick={function(){if(pin===PIN){setAuth(true);setSp(false);setPin("");fl("✓ Acceso concedido")}else fl("PIN incorrecto")}} bg="rgba(74,222,128,.12)" bc="rgba(74,222,128,.3)" col="#4ade80">Entrar</Btn>
+          </div>
+        </div>
+      )}
+
+      {/* ===== TAB CAPTURA ===== */}
+      {tab==="cap"&&(
+        <div style={{padding:"11px 11px 40px"}}>
+          {/* Modal fecha producción */}
+          {showPrdModal&&(
+            <div onClick={function(e){if(e.target===e.currentTarget)setShowPrdModal(false)}} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <div style={{background:"#0f1f0a",border:"1px solid rgba(56,189,248,.3)",borderRadius:12,padding:"22px 20px",minWidth:260,textAlign:"center"}}>
+                <div style={{fontWeight:800,color:"#38bdf8",marginBottom:4,fontSize:13}}>Jalar Produccion</div>
+                <div style={{fontSize:11,color:"#4a6a3a",marginBottom:14}}>¿De qué fecha quieres jalar?</div>
+                <input type="date" value={prdFecha} onChange={function(e){setPrdFecha(e.target.value)}}
+                  style={{width:"100%",padding:"9px 10px",borderRadius:8,border:"1px solid rgba(56,189,248,.3)",background:"rgba(0,0,0,.3)",color:"#e0ead0",fontSize:15,fontWeight:700,outline:"none",marginBottom:14,textAlign:"center"}}/>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={function(){setShowPrdModal(false)}}
+                    style={{flex:1,padding:"9px",borderRadius:8,border:"1px solid rgba(255,255,255,.1)",background:"transparent",color:"#4a6a3a",fontWeight:700,fontSize:12,cursor:"pointer"}}>Cancelar</button>
+                  <button onClick={function(){jPrd(prdFecha)}} disabled={!prdFecha||!!jal}
+                    style={{flex:2,padding:"9px",borderRadius:8,border:"none",background:"linear-gradient(135deg,#1e40af,#3b82f6)",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>
+                    Jalar del {prdFecha}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* De donde viene lo EMPACADO */}
+          {verPrd&&!!origenPrd&&(
+            <div onClick={function(e){if(e.target===e.currentTarget)setVerPrd(false)}}
+              style={{position:"fixed",inset:0,background:"rgba(0,0,0,.82)",zIndex:60,display:"flex",
+                alignItems:"flex-start",justifyContent:"center",padding:"18px 8px",overflowY:"auto"}}>
+              <div style={{background:"#0f1f0a",border:"1px solid rgba(56,189,248,.35)",borderRadius:12,
+                padding:"16px 14px",width:"100%",maxWidth:900}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
+                  <div style={{fontWeight:900,color:"#38bdf8",fontSize:13}}>
+                    De donde viene lo empacado — {origenPrd.cult} · {origenPrd.f}
+                  </div>
+                  <div style={{flex:1}}/>
+                  <button onClick={function(){setVerPrd(false)}}
+                    style={{background:"transparent",border:"1px solid rgba(255,255,255,.12)",borderRadius:7,
+                      color:"#7a9a6a",fontWeight:800,fontSize:11,padding:"4px 12px",cursor:"pointer"}}>CERRAR</button>
+                </div>
+                <div style={{fontSize:10.5,color:"#7a9a6a",marginBottom:11,lineHeight:1.6}}>
+                  <b style={{color:"#38bdf8"}}>Produccion ahorita</b> es lo que tiene capturado la muchacha en este momento.
+                  <b style={{color:"#fbbf24"}}> Copia guardada</b> es lo que la app guardo antes; NUNCA resta, porque
+                  produccion pierde los pallets cuando se embarcan. Si los dos no coinciden, se queda el mayor.
+                </div>
+                {(function(){
+                  var o=origenPrd,labs={};(CLABS[o.cult]||[]).forEach(function(x){labs[x.id]=x.l;});
+                  var llaves={};
+                  [o.vivo,o.copia,o.queda].forEach(function(m){Object.keys(m||{}).forEach(function(k){llaves[k]=1;})});
+                  var filas=[];
+                  Object.keys(llaves).sort().forEach(function(k){
+                    var cals2={};
+                    [o.vivo,o.copia,o.queda].forEach(function(m){
+                      Object.keys((m||{})[k]||{}).forEach(function(ci){if(ci!=="malla")cals2[ci]=1;})});
+                    Object.keys(cals2).sort().forEach(function(ci){
+                      var pres={};
+                      [o.vivo,o.copia,o.queda].forEach(function(m){
+                        Object.keys((((m||{})[k]||{})[ci])||{}).forEach(function(p){pres[p]=1;})});
+                      Object.keys(pres).sort().forEach(function(p){
+                        var v=ni((((o.vivo[k]||{})[ci]||{})[p])||0);
+                        var c=ni((((o.copia[k]||{})[ci]||{})[p])||0);
+                        var q=ni((((o.queda[k]||{})[ci]||{})[p])||0);
+                        var aj=ni(gMan(k,ci,p));
+                        var og=o.porOrigen[k+"|"+ci+"|"+p]||{inventario:0,bajados:0,embarcado:0};
+                        filas.push({k:k,cal:labs[ci]||ci,pres:p,vivo:v,copia:c,queda:q,aj:aj,og:og});
+                      });
+                    });
+                  });
+                  if(!filas.length)return <div style={{fontSize:12,color:"#fca5a5",fontWeight:700}}>
+                    Produccion no trajo nada de {o.cult} para el {o.f}.</div>;
+                  return (
+                    <div style={{overflowX:"auto"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                        <thead>
+                          <tr style={{color:"#4a6a3a",fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>
+                            <th style={{textAlign:"left",padding:"5px 6px"}}>Rancho / malla</th>
+                            <th style={{textAlign:"left",padding:"5px 6px"}}>Calidad</th>
+                            <th style={{textAlign:"left",padding:"5px 6px"}}>Presentacion</th>
+                            <th style={{textAlign:"right",padding:"5px 6px",color:"#38bdf8"}}>Produccion ahorita</th>
+                            <th style={{textAlign:"right",padding:"5px 6px",color:"#fbbf24"}}>Copia guardada</th>
+                            <th style={{textAlign:"right",padding:"5px 6px"}}>Ajuste a mano</th>
+                            <th style={{textAlign:"right",padding:"5px 6px",color:"#4ade80"}}>Queda</th>
+                            <th style={{textAlign:"left",padding:"5px 6px"}}>Desglose de produccion</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filas.map(function(f,i){
+                            var diferente=(f.copia>f.vivo);
+                            var d=[];
+                            if(f.og.inventario)d.push("inventario "+f.og.inventario.toLocaleString());
+                            if(f.og.bajados)d.push("bajados "+f.og.bajados.toLocaleString());
+                            if(f.og.embarcado)d.push("embarcado "+f.og.embarcado.toLocaleString());
+                            return (
+                              <tr key={i} style={{borderTop:"1px solid rgba(255,255,255,.05)",
+                                background:diferente?"rgba(251,191,36,.07)":"transparent"}}>
+                                <td style={{padding:"5px 6px",color:"#c0d0a0",fontWeight:700}}>{f.k}</td>
+                                <td style={{padding:"5px 6px",color:"#e0ead0"}}>{f.cal}</td>
+                                <td style={{padding:"5px 6px",color:"#7a9a6a"}}>{f.pres}</td>
+                                <td style={{padding:"5px 6px",textAlign:"right",fontWeight:900,color:"#38bdf8"}}>{f.vivo.toLocaleString()}</td>
+                                <td style={{padding:"5px 6px",textAlign:"right",fontWeight:900,
+                                  color:diferente?"#fbbf24":"#4a6a3a"}}>{f.copia.toLocaleString()}</td>
+                                <td style={{padding:"5px 6px",textAlign:"right",color:f.aj?"#fca5a5":"#4a6a3a",
+                                  fontWeight:f.aj?900:400}}>{f.aj?(f.aj>0?"+":"")+f.aj:"-"}</td>
+                                <td style={{padding:"5px 6px",textAlign:"right",fontWeight:900,color:"#4ade80"}}>{(f.queda+f.aj).toLocaleString()}</td>
+                                <td style={{padding:"5px 6px",color:"#7a9a6a",fontSize:10}}>{d.join(" + ")||"-"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+                {/* DE DONDE SALEN LOS NUMEROS Y QUE SE QUEDO FUERA */}
+                {(function(){
+                  var c=origenPrd.conteo||{},fu=origenPrd.fuera||[];
+                  var tot=0;fu.forEach(function(x){tot+=x.cajas});
+                  return (
+                    <div style={{marginTop:13,borderTop:"1px solid rgba(255,255,255,.12)",paddingTop:11}}>
+                      <div style={{fontSize:11,color:"#7a9a6a",marginBottom:9}}>
+                        Se lee inventario ({c.inventario||0}), bajados ({c.bajados||0}) y embarcado ({c.embarcado||0}).
+                      </div>
+                      <div style={{fontSize:11,fontWeight:900,color:tot>0?"#fbbf24":"#4a6a3a",
+                        letterSpacing:1.4,textTransform:"uppercase",marginBottom:5}}>
+                        No se conto {tot>0?tot.toLocaleString()+" cajas":"nada"}
+                      </div>
+                      {fu.length>0&&(
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11.5}}>
+                          <thead><tr style={{fontSize:9,color:"#8a6a1e",textAlign:"left"}}>
+                            <th style={{padding:"3px 5px"}}>RANCHO</th><th>MALLA</th><th>CALIDAD</th>
+                            <th>PRESENTACION</th><th style={{textAlign:"right"}}>CAJAS</th>
+                            <th>LISTA</th><th>POR QUE NO SE CONTO</th>
+                          </tr></thead>
+                          <tbody>
+                            {fu.slice(0,60).map(function(x,i){
+                              return (
+                                <tr key={i} style={{borderTop:"1px solid rgba(255,255,255,.07)",
+                                  background:"rgba(251,191,36,.06)"}}>
+                                  <td style={{padding:"4px 5px",color:"#e0ead0",fontWeight:700}}>{x.rancho}</td>
+                                  <td style={{padding:"4px 5px",color:"#c0d0a0"}}>{x.malla||"-"}</td>
+                                  <td style={{padding:"4px 5px",color:"#c0d0a0"}}>{x.cal}</td>
+                                  <td style={{padding:"4px 5px",color:"#7a9a6a"}}>{x.pres||"-"}</td>
+                                  <td style={{padding:"4px 5px",textAlign:"right",fontWeight:900,color:"#fbbf24"}}>{x.cajas.toLocaleString()}</td>
+                                  <td style={{padding:"4px 5px",color:"#7a9a6a",fontSize:10}}>{x.de}</td>
+                                  <td style={{padding:"4px 5px",color:"#fde68a",fontSize:10.5}}>{x.razon}{x.tipo?" · tipo "+x.tipo:""}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      )}
+                      {fu.length>60&&<div style={{fontSize:10,color:"#7a9a6a",marginTop:4}}>
+                        …y {fu.length-60} renglon(es) mas.</div>}
+                    </div>
+                  );
+                })()}
+                <div style={{marginTop:12,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                  <button onClick={function(){
+                      if(!window.confirm("Se tira la copia guardada de "+origenPrd.cult+" del "+origenPrd.f+
+                        " y se queda SOLO lo que tiene produccion en este momento. Seguro?"))return;
+                      var vivo=JSON.parse(JSON.stringify(origenPrd.vivo||{}));
+                      setPrd(function(p){var n=JSON.parse(JSON.stringify(p||{}));n[cult]=vivo;return n;});
+                      fetch(capURL(origenPrd.f,origenPrd.cult),{method:"PUT",
+                        headers:{"Content-Type":"application/json"},
+                        body:JSON.stringify(Object.assign({},vivo,{_v:VER_FIX}))})
+                        .then(function(){fl("Listo: quedo lo que tiene produccion ahorita.");})
+                        .catch(function(){fl("Se cambio en pantalla, pero no se pudo guardar la copia.");});
+                      setVerPrd(false);
+                    }}
+                    style={{background:"rgba(56,189,248,.16)",border:"1px solid rgba(56,189,248,.5)",
+                      borderRadius:7,color:"#38bdf8",fontWeight:900,fontSize:11.5,padding:"7px 14px",
+                      cursor:"pointer",fontFamily:"inherit"}}>USAR SOLO LO DE PRODUCCION AHORITA</button>
+                  <span style={{fontSize:10,color:"#7a9a6a"}}>
+                    Usalo cuando la copia guardada traiga de mas. Los renglones en ambar son esos.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* De donde viene lo llegado */}
+          {!!origen&&(
+            <div onClick={function(e){if(e.target===e.currentTarget)setOrigen(null)}}
+              style={{position:"fixed",inset:0,background:"rgba(0,0,0,.82)",zIndex:60,display:"flex",
+                alignItems:"flex-start",justifyContent:"center",padding:"18px 8px",overflowY:"auto"}}>
+              <div style={{background:"#0f1f0a",border:"1px solid rgba(234,179,8,.35)",borderRadius:12,
+                padding:"16px 14px",width:"100%",maxWidth:780}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3,flexWrap:"wrap"}}>
+                  <div style={{fontWeight:900,color:"#fde047",fontSize:13}}>De donde viene lo llegado — {cult}</div>
+                  <div style={{flex:1}}/>
+                  <button onClick={function(){setOrigen(null)}}
+                    style={{background:"transparent",border:"1px solid rgba(255,255,255,.12)",borderRadius:7,
+                      color:"#7a9a6a",fontWeight:800,fontSize:11,padding:"4px 12px",cursor:"pointer"}}>CERRAR</button>
+                </div>
+                <div style={{fontSize:10,color:"#7a9a6a",marginBottom:11,lineHeight:1.5}}>
+                  Cada reja de recibo con el dia que la aplicacion le asigna. En verde lo que cae en
+                  el <b style={{color:"#4ade80"}}>{fecha}</b> (lo que si entra a tu reporte). Lo demas es de otro dia.
+                </div>
+                {(function(){
+                  var mias=origen.filter(function(f){return f.dia===fecha;});
+                  var porM={},tot=0;
+                  mias.forEach(function(f){
+                    var m=f.malla||"SIN MALLA";
+                    porM[m]=(porM[m]||0)+f.cajas;tot+=f.cajas;
+                  });
+                  var ms=Object.keys(porM).sort();
+                  return (
+                    <div style={{background:"rgba(74,222,128,.06)",border:"1px solid rgba(74,222,128,.2)",
+                      borderRadius:9,padding:"9px 11px",marginBottom:12}}>
+                      <div style={{fontSize:9,color:"#4a6a3a",fontWeight:800,letterSpacing:1.4,
+                        textTransform:"uppercase",marginBottom:7}}>Lo que la app cuenta el {fecha}</div>
+                      {ms.length===0
+                        ? <div>
+                            <div style={{fontSize:12,color:"#fca5a5",fontWeight:800,marginBottom:5}}>
+                              Recibo no tiene nada cerrado para el {fecha}.
+                            </div>
+                            <div style={{fontSize:11,color:"#c0d0a0",lineHeight:1.6}}>
+                              Si abajo ves las rejas que si son de este dia (normalmente estan en el
+                              <b style={{color:"#fde047"}}> dia abierto</b>, porque en recibo todavia no lo cierran),
+                              aprietale a <b style={{color:"#4ade80"}}>USAR PARA EL {fecha}</b> y se pasan solas,
+                              sin teclear. Si no aparecen, capturalas a mano con AGREGAR.
+                            </div>
+                          </div>
+                        : <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                            {ms.map(function(m){return (
+                              <div key={m} style={{background:"rgba(0,0,0,.3)",border:"1px solid rgba(74,222,128,.2)",
+                                borderRadius:8,padding:"6px 11px",minWidth:92}}>
+                                <div style={{fontSize:9,color:"#7a9a6a",fontWeight:800,letterSpacing:1}}>
+                                  MALLA {m}{mallaEsCV(m)?" · CV":" · ORG"}
+                                </div>
+                                <div style={{fontSize:17,fontWeight:900,color:"#4ade80"}}>{porM[m]}</div>
+                                <div style={{fontSize:9,color:"#4a6a3a"}}>rejas</div>
+                              </div>
+                            )})}
+                            <div style={{background:"rgba(74,222,128,.14)",border:"1px solid rgba(74,222,128,.4)",
+                              borderRadius:8,padding:"6px 11px",minWidth:92}}>
+                              <div style={{fontSize:9,color:"#a8e063",fontWeight:800,letterSpacing:1}}>TOTAL</div>
+                              <div style={{fontSize:17,fontWeight:900,color:"#a8e063"}}>{tot}</div>
+                              <div style={{fontSize:9,color:"#4a6a3a"}}>rejas</div>
+                            </div>
+                          </div>}
+                    </div>
+                  );
+                })()}
+                <div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                    <thead>
+                      <tr style={{color:"#4a6a3a",fontSize:9,fontWeight:800,letterSpacing:1,textTransform:"uppercase"}}>
+                        <th style={{textAlign:"left",padding:"5px 6px"}}>Dia que le toca</th>
+                        <th style={{textAlign:"left",padding:"5px 6px"}}>Malla</th>
+                        <th style={{textAlign:"left",padding:"5px 6px"}}>Rancho</th>
+                        <th style={{textAlign:"right",padding:"5px 6px"}}>Rejas</th>
+                        <th style={{textAlign:"left",padding:"5px 6px"}}>De donde</th>
+                        <th style={{textAlign:"left",padding:"5px 6px"}}>Como se le puso la fecha</th>
+                        <th style={{textAlign:"right",padding:"5px 6px"}}>Mandarlo al {fecha}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {origen.length===0&&(
+                        <tr><td colSpan={7} style={{padding:"11px 6px",color:"#fca5a5",fontWeight:700}}>
+                          Recibo no tiene ningun lote de {cult}. Capturalo a mano con AGREGAR.
+                        </td></tr>
+                      )}
+                      {origen.map(function(f,i){
+                        var mio=(f.dia===fecha);
+                        var ojo=(f.via.indexOf("RESPALDO")===0);
+                        return (
+                          <tr key={i} style={{borderTop:"1px solid rgba(255,255,255,.05)",
+                            background:mio?"rgba(74,222,128,.07)":"transparent",opacity:mio?1:.55}}>
+                            <td style={{padding:"5px 6px",fontWeight:800,color:mio?"#4ade80":"#7a9a6a"}}>{f.dia||"?"}</td>
+                            <td style={{padding:"5px 6px",fontWeight:800,color:"#e0ead0"}}>{f.malla||"—"}</td>
+                            <td style={{padding:"5px 6px",color:"#c0d0a0"}}>{f.rancho}</td>
+                            <td style={{padding:"5px 6px",textAlign:"right",fontWeight:900,color:"#e0ead0"}}>{f.cajas}</td>
+                            <td style={{padding:"5px 6px",color:"#7a9a6a"}}>{f.de}</td>
+                            <td style={{padding:"5px 6px",color:ojo?"#fca5a5":"#7a9a6a",fontWeight:ojo?800:400}}>{f.via}</td>
+                            <td style={{padding:"5px 6px",textAlign:"right"}}>
+                              {mio
+                                ? <span style={{fontSize:9,color:"#4ade80",fontWeight:800}}>YA ESTA</span>
+                                : <button onClick={function(){usarPara(f)}}
+                                    style={{background:"rgba(74,222,128,.14)",border:"1px solid rgba(74,222,128,.45)",
+                                      borderRadius:6,color:"#4ade80",fontWeight:900,fontSize:9.5,letterSpacing:.4,
+                                      padding:"4px 9px",cursor:"pointer",whiteSpace:"nowrap",fontFamily:"inherit"}}>
+                                    USAR PARA EL {fecha}
+                                  </button>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{fontSize:10,color:"#7a9a6a",marginTop:10,lineHeight:1.5}}>
+                  Las lineas en <b style={{color:"#fca5a5"}}>rojo</b> de la ultima columna son las que no traian
+                  fecha escrita: la app tuvo que usar la hora en que se guardo el cierre, y por eso pueden caer
+                  en el dia equivocado. El <b>dia abierto</b> se fecha con la hora en que capturaste el lote,
+                  no con el dia del corte.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* VEREDICTO DE RECIBO — en grande y hasta arriba.
+              Antes solo habia un puntito de color y no se sabia si jalo o no. */}
+          {!!avisoRec&&avisoRec.f===fecha&&avisoRec.cult===cult&&(function(){
+            var a=avisoRec;
+            if(a.buscando)return (
+              <div style={{background:"rgba(255,255,255,.04)",border:"1px solid rgba(255,255,255,.1)",
+                borderRadius:9,padding:"10px 13px",marginBottom:11,fontSize:12,color:"#7a9a6a",fontWeight:700}}>
+                Buscando lo del {fecha} en recibo de fruta...
+              </div>
+            );
+            if(a.sinSenal)return (
+              <div style={{background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.4)",
+                borderRadius:9,padding:"10px 13px",marginBottom:11,fontSize:12.5,color:"#fca5a5",fontWeight:800}}>
+                No se pudo leer recibo de fruta (sin senal). No se toco nada de lo que ya tenias.
+              </div>
+            );
+            if(a.n>0)return (
+              <div style={{background:"rgba(74,222,128,.08)",border:"1px solid rgba(74,222,128,.28)",
+                borderRadius:9,padding:"10px 13px",marginBottom:11,fontSize:12.5,color:"#4ade80",fontWeight:800}}>
+                Recibo de fruta trajo {a.n} malla(s) del {fecha}
+                {a.rejas?" · "+a.rejas.toLocaleString()+" rejas":""}
+                {a.quitadas?<span style={{color:"#fbbf24",fontWeight:700}}>{"  ·  se quitaron "+a.quitadas+" que no eran de este dia"}</span>:null}
+                {a.mezcladas&&a.mezcladas.length>0&&(
+                  <div style={{marginTop:6,fontSize:11,color:"#fbbf24",fontWeight:700,lineHeight:1.6}}>
+                    En recibo capturaron la misma malla de las dos formas, organico y convencional.
+                    La app la junta en una sola tarjeta y le pone el tipo que traiga mas rejas:
+                    <div style={{color:"#fde68a",fontWeight:800}}>{"malla "+a.mezcladas.join(" · malla ")}</div>
+                  </div>
+                )}
+              </div>
+            );
+            return (
+              <div style={{background:"rgba(251,191,36,.12)",border:"1px solid rgba(251,191,36,.5)",
+                borderRadius:9,padding:"12px 13px",marginBottom:11}}>
+                <div style={{fontSize:13,color:"#fbbf24",fontWeight:900,marginBottom:4}}>
+                  Recibo de fruta NO tiene nada de {cult} del {fecha}.
+                </div>
+                <div style={{fontSize:11.5,color:"#d0c090",lineHeight:1.6,marginBottom:9}}>
+                  Puede ser que todavia no cierren el dia alla. Registralo tu a mano, o revisa si las
+                  rejas estan en el dia abierto y mandalas a esta fecha con un clic.
+                </div>
+                <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                  <button onClick={function(){
+                      var e=document.getElementById("campoMalla");
+                      if(e){try{e.scrollIntoView({block:"center",behavior:"smooth"})}catch(x){}
+                        setTimeout(function(){try{e.focus()}catch(x){}},250);}
+                    }}
+                    style={{background:"rgba(74,222,128,.16)",border:"1px solid rgba(74,222,128,.5)",
+                      borderRadius:7,color:"#4ade80",fontWeight:900,fontSize:11.5,padding:"7px 14px",
+                      cursor:"pointer",fontFamily:"inherit"}}>REGISTRAR A MANO</button>
+                  <button onClick={verOrigen} disabled={!!jal}
+                    style={{background:"rgba(234,179,8,.1)",border:"1px solid rgba(234,179,8,.45)",
+                      borderRadius:7,color:"#fde047",fontWeight:900,fontSize:11.5,padding:"7px 14px",
+                      cursor:jal?"not-allowed":"pointer",opacity:jal?.5:1,fontFamily:"inherit"}}>
+                    VER QUE HAY EN RECIBO</button>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Calidades que produccion graba y la app no sabe clasificar */}
+          {!!calsRaras&&calsRaras.f===fecha&&calsRaras.cult===cult&&(
+            <div style={{background:"rgba(251,191,36,.12)",border:"1px solid rgba(251,191,36,.5)",
+              borderRadius:9,padding:"11px 13px",marginBottom:11}}>
+              <div style={{fontSize:13,color:"#fbbf24",fontWeight:900,marginBottom:5}}>
+                Produccion trae calidades que no se pudieron clasificar.
+              </div>
+              <div style={{fontSize:11.5,color:"#d0c090",lineHeight:1.7,marginBottom:5}}>
+                Esas cajas NO entraron al rendimiento. Revisa como las estan capturando alla:
+              </div>
+              {Object.keys(calsRaras.cals).map(function(c,i){
+                return (
+                  <div key={i} style={{fontSize:12,color:"#fde68a",fontWeight:800,padding:"2px 0"}}>
+                    · "{c}" — {calsRaras.cals[c].toLocaleString()} cajas fuera
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Mallas que no son de ese rancho: se sacaron del reporte */}
+          {mallasRaras.length>0&&(
+            <div style={{background:"rgba(251,191,36,.1)",border:"1px solid rgba(251,191,36,.45)",
+              borderRadius:9,padding:"11px 13px",marginBottom:11}}>
+              <div style={{fontSize:13,color:"#fbbf24",fontWeight:900,marginBottom:5}}>
+                Se sacaron {mallasRaras.length} malla(s) que no son de ese rancho
+              </div>
+              <div style={{fontSize:11.5,color:"#d0c090",lineHeight:1.7,marginBottom:4}}>
+                En persa: Cordillera corta la 7, Forrajera la 1 y la 3, PVT la 5. Si de verdad
+                cambio, avisame y la agrego. Mientras, no entran al reporte:
+              </div>
+              {mallasRaras.map(function(k,i){
+                return (
+                  <div key={i} style={{fontSize:12,color:"#fde68a",fontWeight:800,padding:"2px 0"}}>
+                    &middot; {nomLlave(k)}{mallaLlave(k)?" malla "+mallaLlave(k):""}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* El dia viene del reporte de trazabilidad */}
+          {!!trz&&trz.f===fecha&&trz.cult===cult&&(
+            <div style={{background:"rgba(56,189,248,.1)",border:"1px solid rgba(56,189,248,.45)",
+              borderRadius:9,padding:"9px 13px",marginBottom:11,fontSize:12,color:"#38bdf8",fontWeight:800}}>
+              Lo empacado de este dia viene del reporte de trazabilidad. Produccion no lo pisa.
+            </div>
+          )}
+
+          {/* NO CUADRA RECIBO CON PRODUCCION */}
+          {incong.hay>0&&(
+            <div style={{background:"rgba(239,68,68,.12)",border:"2px solid rgba(239,68,68,.6)",
+              borderRadius:9,padding:"12px 14px",marginBottom:11}}>
+              <div style={{fontSize:13,color:"#f87171",fontWeight:900,marginBottom:5,letterSpacing:.3}}>
+                No cuadra recibo con produccion
+              </div>
+              {incong.sinRec.map(function(x,i){
+                return <div key={"a"+i} style={{fontSize:12,color:"#fecaca",padding:"2px 0"}}>
+                  {nomLlave(x.k)}{mallaLlave(x.k)?" M"+mallaLlave(x.k):""} — {x.n.toLocaleString()} cajas, sin rejas
+                </div>;
+              })}
+              {incong.sinPrd.map(function(x,i){
+                return <div key={"b"+i} style={{fontSize:12,color:"#fecaca",padding:"2px 0"}}>
+                  {nomLlave(x.k)}{mallaLlave(x.k)?" M"+mallaLlave(x.k):""} — {x.n.toLocaleString()} rejas, sin cajas
+                </div>;
+              })}
+            </div>
+          )}
+
+          {/* Mallas que NO estan contando por falta del dato por reja */}
+          {mallasMudas.length>0&&(
+            <div style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.5)",
+              borderRadius:9,padding:"11px 13px",marginBottom:11}}>
+              <div style={{fontSize:13,color:"#fca5a5",fontWeight:900,marginBottom:5}}>
+                Cuidado: {mallasMudas.length} malla(s) NO estan contando en lo llegado.
+              </div>
+              <div style={{fontSize:11.5,color:"#e0b0b0",lineHeight:1.7,marginBottom:4}}>
+                Sus rejas si aparecen en el total, pero sin el dato por reja valen cero y la suma
+                te sale corta. Llena el campo que falta en cada tarjeta:
+              </div>
+              {mallasMudas.map(function(m,i){
+                return (
+                  <div key={i} style={{fontSize:12,color:"#fecaca",fontWeight:800,padding:"2px 0"}}>
+                    · Malla {m.malla||"(sin malla)"} — {m.rejas.toLocaleString()} rejas — falta <b>{m.pide}</b>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Estado del jalado automatico */}
+          {(function(){
+            function pinta(t,v,n){
+              var ok=(v||"").indexOf("OK")===0;
+              var vacio=(v==="sin captura");
+              var col=ok?"#4ade80":(vacio?"#f59e0b":(v?"#ef4444":"#4a6a3a"));
+              return (
+                <div style={{display:"flex",alignItems:"center",gap:6,minWidth:172}}>
+                  <span style={{width:9,height:9,borderRadius:9,background:col,flex:"none",
+                    boxShadow:"0 0 7px "+col}}/>
+                  <span style={{fontSize:10,color:"#7a9a6a",fontWeight:700,letterSpacing:.5,
+                    textTransform:"uppercase"}}>{t}</span>
+                  <span style={{fontSize:11,color:col,fontWeight:800}}>
+                    {v?(vacio?"sin captura — va manual":v):"esperando..."}
+                  </span>
+                </div>
+              );
+            }
+            var h=est.t?new Date(est.t):null;
+            return (
+              <div style={{background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.08)",
+                borderRadius:9,padding:"8px 12px",marginBottom:9,display:"flex",gap:16,
+                alignItems:"center",flexWrap:"wrap"}}>
+                <button onClick={function(){setAutoJala(!autoJala)}}
+                  style={{display:"flex",alignItems:"center",gap:6,background:"none",border:"none",
+                    cursor:"pointer",padding:0}}>
+                  <span style={{width:32,height:17,borderRadius:17,flex:"none",position:"relative",
+                    background:autoJala?"rgba(74,222,128,.35)":"rgba(255,255,255,.12)",
+                    border:"1px solid "+(autoJala?"rgba(74,222,128,.6)":"rgba(255,255,255,.18)")}}>
+                    <span style={{position:"absolute",top:2,left:autoJala?16:2,width:11,height:11,
+                      borderRadius:11,background:autoJala?"#4ade80":"#6a7a5a"}}/>
+                  </span>
+                  <span style={{fontSize:9,fontWeight:900,letterSpacing:1.6,textTransform:"uppercase",
+                    color:autoJala?"#4ade80":"#6a7a5a"}}>{autoJala?"Al dia solo":"Automatico en pausa"}</span>
+                </button>
+                {pinta("Recibo",est.rec)}
+                {pinta("Produccion",est.prd)}
+                <div style={{flex:1}}/>
+                <span style={{fontSize:10,color:"#4a6a3a"}}>
+                  {h?("actualizado "+String(h.getHours()).padStart(2,"0")+":"+String(h.getMinutes()).padStart(2,"0")):(autoOn?"jalando...":"")}
+                </span>
+                <button onClick={function(){setAutoJala(true);jalaTodo(true,true);}} disabled={!!jal}
+                  style={{background:"rgba(74,222,128,.1)",border:"1px solid rgba(74,222,128,.3)",
+                    borderRadius:7,color:"#4ade80",fontWeight:800,fontSize:11,padding:"5px 11px",
+                    cursor:jal?"not-allowed":"pointer",opacity:jal?.5:1}}>Actualizar ahora</button>
+              </div>
+            );
+          })()}
+
+          <div style={{display:"flex",gap:7,marginBottom:11,flexWrap:"wrap",alignItems:"center"}}>
+            <Btn onClick={jRec} dis={!!jal} bg="rgba(234,179,8,.08)" bc="rgba(234,179,8,.25)" col="#fde047">{jal==="r"?"Jalando recibo...":"⬇ Jalar de Recibo"}</Btn>
+            <Btn onClick={function(){setPrdFecha(fecha);setShowPrdModal(true);}} dis={!!jal} bg="rgba(56,189,248,.08)" bc="rgba(56,189,248,.25)" col="#38bdf8">{jal==="p"?"Jalando produccion...":"⬇ Jalar de Produccion"}</Btn>
+            <div style={{flex:1}}/>
+            <Btn onClick={verOrigen} dis={!!jal} bg="rgba(234,179,8,.08)" bc="rgba(234,179,8,.3)" col="#fde047">De donde viene lo llegado</Btn>
+            <Btn onClick={function(){setVerPrd(true)}} dis={!origenPrd} bg="rgba(56,189,248,.08)" bc="rgba(56,189,248,.35)" col="#38bdf8">De donde viene lo empacado</Btn>
+            <Btn onClick={limpiarDia} bg="rgba(239,68,68,.08)" bc="rgba(239,68,68,.3)" col="#fca5a5">Limpiar este dia</Btn>
+            {hayD&&<Btn onClick={compartirReporte} bg="rgba(37,211,102,.12)" bc="rgba(37,211,102,.45)" col="#25D366">Compartir reporte</Btn>}
+            {hayD&&<Btn onClick={guardar} dis={grd} bg="rgba(74,222,128,.1)" bc="rgba(74,222,128,.3)" col="#4ade80">{grd?"Guardando...":" Guardar día"}</Btn>}
+          </div>
+
+          <div style={{background:"rgba(255,255,255,.02)",border:"1px solid rgba(255,255,255,.06)",borderRadius:8,padding:"9px 11px",marginBottom:11}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,flexWrap:"wrap"}}>
+              <div style={{fontSize:9,color:"#4a6a3a",fontWeight:700,letterSpacing:1.5,textTransform:"uppercase"}}>Recibo por malla</div>
+              <div style={{flex:1}}/>
+              {(function(){
+                var ra=gi("_nuevo","rancho")||ranchosDe(cult)[0];
+                var ml=gi("_nuevo","malla")||"";
+                function agregar(){
+                  if(!ml.trim())return;
+                  addMalla(ra,"ORG",ml);
+                  si("_nuevo","malla","");
+                }
+                var SS=Object.assign({},INP,{padding:"3px 6px",fontSize:11});
+                return (
+                  <div style={{display:"flex",alignItems:"center",gap:5,flexWrap:"wrap"}}>
+                    <span style={{fontSize:9,color:"#4a6a3a",fontWeight:700}}>AGREGAR</span>
+                    <select value={ra} onChange={function(e){si("_nuevo","rancho",e.target.value)}}
+                      style={Object.assign({},SS,{width:108})}>
+                      {ranchosDe(cult).map(function(r){return <option key={r} value={r}>{r}</option>})}
+                    </select>
+                    <input type="text" placeholder="malla" value={ml} id="campoMalla"
+                      onChange={function(e){si("_nuevo","malla",e.target.value)}}
+                      onKeyDown={function(e){if(e.key==="Enter")agregar()}}
+                      style={Object.assign({},SS,{width:58})}/>
+                    <button onClick={agregar}
+                      style={{background:"rgba(74,222,128,.14)",border:"1px solid rgba(74,222,128,.4)",
+                        borderRadius:5,color:"#4ade80",fontWeight:900,fontSize:10,letterSpacing:.5,
+                        padding:"3px 10px",cursor:"pointer"}}>AGREGAR</button>
+                    <span style={{fontSize:9,color:"#4a6a3a"}}>
+                      {ml.trim()
+                        ?(mallaEsCV(ml)?"sera CONVENCIONAL":(mallaEsORG(ml)?"sera ORGANICA":"toma el tipo de recibo"))
+                        :"6A organica; 6 y 6B convencionales; las demas como las tenga recibo"}
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              {(function(){
+                var ks={};
+                Object.keys(rec[cult]||{}).forEach(function(k){ks[k]=1;});
+                Object.keys(prd[cult]||{}).forEach(function(k){if(k!=="malla")ks[k]=1;});
+                ranchosKeys(cult).forEach(function(k){ks[k]=1;});
+                // no se pinta una malla que no es de ese rancho
+                var arr=Object.keys(ks).filter(function(k){return mallaValida(cult,k)});
+                return arr.sort();
+              })().map(function(rancho,ri){
+                var rv=(rec[cult]||{})[rancho]||{};var rc=RC[ri%RC.length];
+                // Solo se avisa cuando la malla no la trae NADIE. Si viene de
+                // recibo o de produccion no hace falta decirlo en la tarjeta:
+                // eso se consulta en los paneles de "de donde viene".
+                var _huerf=(ni(rv.rejas)<=0)&&totLlave(prd[cult]||{},rancho)<=0;
+                return(
+                  <div key={rancho} style={{background:"rgba(255,255,255,.03)",border:"1px solid "+(_huerf?"#fbbf2466":rc+"33"),borderLeft:"3px solid "+rc,borderRadius:7,padding:"8px 10px",minWidth:165}}>
+                    <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:5,flexWrap:"wrap"}}><span style={{fontWeight:800,color:rc,fontSize:12}}>{nomLlave(rancho)}</span>{mallaLlave(rancho)&&<span style={{fontSize:9,fontWeight:900,color:"#07100a",background:rc,borderRadius:4,padding:"1px 5px"}}>MALLA {mallaLlave(rancho)}</span>}
+                    {_huerf&&<span style={{fontSize:9,color:"#fbbf24",fontWeight:700}}>sin origen</span>}</div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      <div><div style={{fontSize:8,color:"#4a6a3a",marginBottom:2}}>Rejas</div><input type="number" min="0" placeholder="0" value={rv.rejas===0?"":(rv.rejas||"")} onChange={function(e){sRej(rancho,e.target.value)}} style={Object.assign({},INP,{width:65,fontWeight:900})}/></div>
+                      <div><div style={{fontSize:8,color:"#4a6a3a",marginBottom:2}}>Kg/reja</div><input type="number" min="0" step="0.1" placeholder="0.0" value={gi(rancho,"pesoReja")} onChange={function(e){si(rancho,"pesoReja",e.target.value)}} style={Object.assign({},INP,{width:65})}/></div>
+                      {(cult==="Slicer"||cult==="Europeo"||cult==="Morron")&&<div><div style={{fontSize:8,color:"#4a6a3a",marginBottom:2}}>Pzas/reja</div><input type="number" min="0" placeholder="0" value={gi(rancho,"piezasReja")} onChange={function(e){si(rancho,"piezasReja",e.target.value)}} style={Object.assign({},INP,{width:65})}/></div>}
+                    </div>
+                    {(function(){
+                      var pk=partesLlave(rancho);
+                      if(!pk.tipo)return null;
+                      var nm=gi(rancho,"nuevaMalla");
+                      return (
+                        <div data-nofoto="1" style={{display:"flex",gap:5,alignItems:"center",marginTop:7,
+                          paddingTop:6,borderTop:"1px solid rgba(255,255,255,.07)"}}>
+                          <span style={{fontSize:8,color:"#4a6a3a",fontWeight:700,
+                            letterSpacing:.6,textTransform:"uppercase"}}>Otra malla</span>
+                          <input type="text" inputMode="numeric" placeholder="3" value={nm}
+                            onChange={function(e){si(rancho,"nuevaMalla",e.target.value)}}
+                            onKeyDown={function(e){if(e.key==="Enter"){addMalla(pk.rancho,pk.tipo,nm);si(rancho,"nuevaMalla","");}}}
+                            style={Object.assign({},INP,{width:42,padding:"3px 5px",fontSize:12})}/>
+                          <button onClick={function(){addMalla(pk.rancho,pk.tipo,nm);si(rancho,"nuevaMalla","");}}
+                            style={{background:"rgba(74,222,128,.14)",border:"1px solid rgba(74,222,128,.4)",
+                              borderRadius:5,color:"#4ade80",fontWeight:900,fontSize:10,letterSpacing:.5,
+                              padding:"3px 9px",cursor:"pointer",lineHeight:1.3}}>AGREGAR</button>
+                          <div style={{flex:1}}/>
+                          {pk.malla&&!ni(rv.rejas)&&(
+                            <button onClick={function(){delKey(rancho)}} title="Quitar esta malla"
+                              style={{background:"rgba(239,68,68,.12)",border:"1px solid rgba(239,68,68,.35)",
+                                borderRadius:5,color:"#ef4444",fontWeight:900,fontSize:11,
+                                padding:"2px 8px",cursor:"pointer",lineHeight:1.4}}>quitar</button>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {!hayD&&(
+            <div style={{textAlign:"center",padding:"28px 12px",color:"#4a6a3a",fontSize:13,lineHeight:1.7}}>
+              <div style={{fontWeight:800,color:"#7a9a6a",marginBottom:6}}>
+                No hay nada de {cult} en el {fecha}.
+              </div>
+              <div style={{fontSize:11.5,maxWidth:470,margin:"0 auto 13px"}}>
+                Puede que en recibo todavia no cierren el dia. Abre
+                <b style={{color:"#fde047"}}> De donde viene lo llegado</b> y ahi le mandas las rejas
+                a esta fecha con un clic, o capturalas a mano arriba con AGREGAR.
+              </div>
+              <Btn onClick={verOrigen} dis={!!jal} bg="rgba(234,179,8,.1)" bc="rgba(234,179,8,.4)" col="#fde047">
+                Ver de donde viene lo llegado
+              </Btn>
+            </div>
+          )}
+
+          {hayD&&(
+            <div id="reporte" style={{display:"flex",gap:12,alignItems:"flex-start",flexWrap:"wrap"}}>
+
+              {/* IZQUIERDA — captura y detalle por presentacion (12CT, 24CT, 1/9...).
+                  Va marcado data-nofoto: se ve en pantalla, donde lo necesitas para
+                  capturar y ajustar, pero NO sale en la imagen que se comparte. Al
+                  grupo se manda solo el reporte de la derecha, que es el concreto. */}
+              <div data-nofoto="1" style={{flex:"1 1 420px",minWidth:"min(100%,380px)",maxWidth:620}}>
+                {activos.map(function(rancho,ri){
+                  var d=calcs[rancho],rc=RC[ri%RC.length];
+                  var prR=(prd[cult]||{})[rancho]||{};
+                  return(
+                    <div key={rancho} className="fi" style={{background:"rgba(255,255,255,.025)",border:"1px solid "+rc+"44",borderLeft:"4px solid "+rc,borderRadius:8,marginBottom:10,overflow:"hidden"}}>
+                      <div style={{padding:"8px 12px",background:"rgba(0,0,0,.45)",display:"flex",alignItems:"center",gap:8,borderBottom:"1px solid "+rc+"33"}}>
+                        <span style={{fontWeight:900,color:rc,fontSize:16}}>{nomLlave(rancho)}</span>
+                        {(mallaLlave(rancho)||d.malla)&&<span style={{fontSize:10,fontWeight:800,color:"#0b1a0e",background:rc,borderRadius:4,padding:"1px 6px"}}>MALLA {mallaLlave(rancho)||d.malla}</span>}
+                        {/* Europeo va en PIEZAS y Slicer en cajas de 36 CT.
+                            Antes siempre decia "kg/reja" y en Europeo salia
+                            "0 kg/reja", que ademas no es lo que se mide. */}
+                        <span style={{fontSize:11,color:"#6a7a5a"}}>
+                          {(function(){
+                            var porReja=d.esEuro?(nf(gi(rancho,"piezasReja"))||0)
+                              :(d.pesoReja||nf(gi(rancho,"piezasReja"))||0);
+                            var uni=d.esEuro?"pzas/reja":(d.esSli?(d.pesoReja?"kg/reja":"pzas/reja"):"kg/reja");
+                            return d.rejas+" rejas x "+porReja+" "+uni+" = "+
+                              Number(d.kgRec||0).toLocaleString()+" "+(d.u||"kg");
+                          })()}
+                        </span>
+                        <div style={{flex:1}}/>
+                        <span style={{fontSize:12,fontWeight:800,color:mCol(d.pctM)}}>Merma {d.pctM}%</span>
+                      </div>
+                      {d.kgRec>0&&d.kgEmp>d.kgRec&&(
+                        <div style={{background:"rgba(239,68,68,.14)",borderBottom:"1px solid rgba(239,68,68,.4)",
+                          padding:"5px 12px",fontSize:11,fontWeight:800,color:"#fca5a5"}}>
+                          Empacaste {Math.round(d.kgEmp-d.kgRec).toLocaleString()} {d.u} mas de lo que llego ({d.fRend}%).
+                          Revisa si unas cajas van en otra malla, y muevelas con el ajuste de abajo: -cajas aqui, +cajas alla.
+                        </div>
+                      )}
+                      <div style={{height:5,display:"flex",background:"rgba(239,68,68,.2)"}}>
+                        {cals.map(function(cal){var p=pc((d.det[cal.id]||{kg:0}).kg,d.kgRec);if(p<=0)return null;return <div key={cal.id} style={{width:p+"%",background:cal.c}}/>;})}</div>
+                      <div style={{padding:"7px 9px"}}>
+                        {(function(){
+                          // Solo se marca lo que YA NO ESTA EN EL CUARTO, que es
+                          // lo unico que no se puede comprobar a simple vista.
+                          var og=(origenPrd&&origenPrd.cult===cult&&origenPrd.porOrigen)||{};
+                          var ps=[];
+                          cals.forEach(function(cal){var pr=prR[cal.id]||{};
+                            Object.keys(pr).forEach(function(p){
+                              if(ni(pr[p])<=0)return;
+                              var o=og[rancho+"|"+cal.id+"|"+p]||null;
+                              var fue=o?((o.bajados||0)+(o.embarcado||0)):0;
+                              ps.push(cal.l.split(" ")[0]+" "+p+"("+pr[p]+(fue>0?", "+fue+" ya salio":"")+")");
+                            })});
+                          if(!ps.length)return null;
+                          return <div data-nofoto="1" style={{fontSize:9,color:"#4a5a3a",marginBottom:4,padding:"2px 4px",background:"rgba(255,255,255,.03)",borderRadius:3}}>Encontrado: {ps.join(" · ")}</div>})()}
+                        {/* AJUSTE A MANO: cajas que produccion no alcanzo a registrar.
+                            Se SUMAN a lo jalado, asi que el jalado automatico no las pisa. */}
+                        {(function(){
+                          var ca=gi(rancho,"ajCal")||(cals[0]&&cals[0].id)||"a";
+                          var pr2=gi(rancho,"ajPres")||"";
+                          var cj=gi(rancho,"ajCajas")||"";
+                          var mv=(man[cult]||{})[rancho]||{};
+                          var lista=[];
+                          Object.keys(mv).forEach(function(ci){
+                            Object.keys(mv[ci]||{}).forEach(function(p){lista.push({ci:ci,p:p,v:mv[ci][p]});});
+                          });
+                          function agregar(){
+                            if(!pr2.trim()||!ni(cj))return;
+                            sMan(rancho,ca,pr2.trim().toUpperCase(),ni(cj));
+                            si(rancho,"ajPres","");si(rancho,"ajCajas","");
+                          }
+                          var SS=Object.assign({},INP,{padding:"3px 5px",fontSize:11});
+                          return (
+                            <div data-nofoto="1" style={{marginTop:6,paddingTop:6,borderTop:"1px dashed rgba(251,191,36,.35)"}}>
+                              <div style={{fontSize:8,color:"#fbbf24",fontWeight:900,letterSpacing:1,
+                                textTransform:"uppercase",marginBottom:4}}>Ajuste de cajas &nbsp;<span style={{color:"#7a9a6a",fontWeight:700,letterSpacing:0,textTransform:"none"}}>se va sumando: 171 si faltaron, -171 para quitarlas</span></div>
+                              <div style={{display:"flex",gap:5,flexWrap:"wrap",alignItems:"center"}}>
+                                <select value={ca} onChange={function(e){si(rancho,"ajCal",e.target.value)}}
+                                  style={Object.assign({},SS,{width:112})}>
+                                  {cals.map(function(c){return <option key={c.id} value={c.id}>{c.l}</option>})}
+                                </select>
+                                <input list="presPV" placeholder="12CT" value={pr2}
+                                  onChange={function(e){si(rancho,"ajPres",e.target.value)}}
+                                  style={Object.assign({},SS,{width:92})}/>
+                                <input type="number" placeholder="171" value={cj}
+                                  onChange={function(e){si(rancho,"ajCajas",e.target.value)}}
+                                  onKeyDown={function(e){if(e.key==="Enter")agregar()}}
+                                  style={Object.assign({},SS,{width:64,fontWeight:900})}/>
+                                {(function(){
+                                  var listo=!!pr2.trim()&&!!ni(cj);
+                                  return (
+                                    <button onClick={agregar} disabled={!listo}
+                                      style={{background:listo?"#fbbf24":"rgba(251,191,36,.12)",
+                                        border:"1px solid rgba(251,191,36,"+(listo?"1":".3")+")",
+                                        borderRadius:5,color:listo?"#3a2c00":"#7a6a3a",fontWeight:900,
+                                        fontSize:11,letterSpacing:.6,padding:"4px 12px",
+                                        cursor:listo?"pointer":"not-allowed"}}>APLICAR</button>
+                                  );
+                                })()}
+                              </div>
+                              {lista.length>0&&(
+                                <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:5}}>
+                                  {lista.map(function(x,xi){
+                                    var cl=(cals.filter(function(c){return c.id===x.ci})[0]||{}).l||x.ci;
+                                    return (
+                                      <span key={xi} style={{fontSize:10,fontWeight:700,color:"#fbbf24",
+                                        background:"rgba(251,191,36,.1)",border:"1px solid rgba(251,191,36,.3)",
+                                        borderRadius:5,padding:"2px 6px",display:"inline-flex",alignItems:"center",gap:5}}>
+                                        {cl.split(" ")[0]} {x.p} {x.v>0?"+":""}{x.v}
+                                        <button onClick={function(){sMan(rancho,x.ci,x.p,"")}}
+                                          style={{background:"rgba(239,68,68,.15)",border:"1px solid rgba(239,68,68,.4)",
+                                            borderRadius:4,color:"#fca5a5",fontWeight:900,cursor:"pointer",
+                                            fontSize:9,letterSpacing:.5,padding:"1px 5px"}}>QUITAR</button>
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
+                        <table style={{width:"100%",borderCollapse:"collapse"}}>
+                          <thead>
+                            <tr style={{borderBottom:"1px solid rgba(255,255,255,.08)"}}>
+                              <th style={{padding:"3px 4px",textAlign:"left",fontSize:9,color:"#4a6a3a",fontWeight:700}}>Calidad · Presentación</th>
+                              <th style={TH}>Cajas</th><th style={TH}>{d.esEuro?"Pzas":(d.esSli?"Cj 36CT":"Kg")}</th><th style={Object.assign({},TH,{color:"#a8e063"})}>Factor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {cals.map(function(cal){
+                              var det=d.det[cal.id]||{kg:0,dsg:{}};var dsg=det.dsg||{};
+                              var pk=Object.keys(dsg).filter(function(k){return(dsg[k].cajas||0)>0});
+                              if(!pk.length&&det.kg===0)return null;
+                              var _cr=cajaRef(cult,cal.id);var _v=valCal(d,det);
+                              var fac=(d.rejas>0&&_v>0&&_cr.f>0)?r2((_v/_cr.f)/d.rejas):0;
+                              var totC=pk.reduce(function(s,p){return s+(dsg[p].cajas||0)},0);
+                              return [
+                                pk.map(function(pres){var pd=dsg[pres];return(
+                                  <tr key={cal.id+"_"+pres} style={{borderBottom:"1px solid rgba(255,255,255,.03)"}}>
+                                    <td style={{padding:"4px 4px 4px 9px",fontSize:13}}><span style={{color:cal.c,fontWeight:700,fontSize:10,marginRight:3}}>{cal.l.split(" ")[0]}</span>{pres}</td>
+                                    <td style={TD({fontFamily:"'DM Mono',monospace",fontSize:14,fontWeight:700,color:"#e0ead0"})}>{pd.cajas}</td>
+                                    <td style={TD({fontFamily:"'DM Mono',monospace",fontSize:13,color:"#b0c890"})}>{Number(d.esEuro?pd.pz:(d.esSli?pd.cj:pd.kg)||0).toLocaleString()}</td>
+                                    <td style={TD({fontSize:10,color:"#3a4a2a"})}>—</td>
+                                  </tr>
+                                )}),
+                                <tr key={cal.id+"_T"} style={{background:"rgba(255,255,255,.04)",borderTop:"1px solid rgba(255,255,255,.1)"}}>
+                                  <td style={{padding:"5px 4px",fontWeight:900,color:cal.c,fontSize:13}}>Total {cal.l.split(" ")[0]}</td>
+                                  <td style={TD({fontWeight:800,fontSize:14,fontFamily:"'DM Mono',monospace",color:"#e0ead0"})}>{totC}</td>
+                                  <td style={TD({fontWeight:900,fontSize:15,fontFamily:"'DM Mono',monospace",color:cal.c})}>{Number(_v||0).toLocaleString()}</td>
+                                  <td style={TD({fontWeight:900,fontSize:14,fontFamily:"'DM Mono',monospace",color:"#a8e063"})}>{fac}</td>
+                                </tr>
+                              ];
+                            })}
+                            <tr style={{borderTop:"1px solid rgba(239,68,68,.25)"}}>
+                              <td style={{padding:"5px 4px",fontWeight:700,color:"#ef4444",fontSize:13}}>Merma</td>
+                              <td style={TD({color:"#4a5a3a"})}>—</td>
+                              <td style={TD({fontWeight:900,fontSize:15,fontFamily:"'DM Mono',monospace",color:"#ef4444"})}>{Number(d.kgM||0).toLocaleString()}</td>
+                              <td style={TD({fontWeight:700,fontSize:13,color:mCol(d.pctM)})}>{d.pctM}%</td>
+                            </tr>
+                            <tr style={{borderTop:"1px solid rgba(74,222,128,.2)",background:"rgba(74,222,128,.04)"}}>
+                              <td style={{padding:"5px 4px",fontWeight:900,color:"#4ade80",fontSize:13}}>Empacado</td>
+                              <td style={TD({fontSize:12,fontFamily:"'DM Mono',monospace",color:"#6a7a5a"})}>{cals.reduce(function(s,cal){var dt=d.det[cal.id]||{dsg:{}};return s+Object.keys(dt.dsg||{}).reduce(function(ss,p){return ss+(dt.dsg[p].cajas||0)},0)},0)}</td>
+                              <td style={TD({fontWeight:900,fontSize:15,fontFamily:"'DM Mono',monospace",color:"#4ade80"})}>{Number(d.kgEmp||0).toLocaleString()}</td>
+                              <td style={TD({fontSize:10,color:"#3a4a2a"})}>—</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* DERECHA: comparativa con donas */}
+              <div style={{flex:1,minWidth:240}}>
+                <div style={{background:"#0b1a0e",border:"1px solid rgba(74,222,128,.2)",borderRadius:10,overflow:"hidden",maxWidth:"min(100%,560px)"}}>
+                  <div style={{background:"rgba(0,0,0,.5)",padding:"9px 12px",borderBottom:"1px solid rgba(74,222,128,.15)"}}>
+                    <div style={{fontSize:9,color:"#4a8a5a",fontWeight:700,letterSpacing:2,textTransform:"uppercase"}}>Parras Valley Tomatoes</div>
+                    <div style={{fontSize:14,fontWeight:900,color:"#a8e063",marginTop:1}}>Comparativa de Ranchos</div>
+                    <div style={{fontSize:10,color:"#4a6a3a"}}>{cult} · {fecha}</div>
+                  </div>
+                  {VigBox()}
+                  {/* El letrero rojo de diagnostico se quito a peticion del usuario.
+                     El semaforo de arriba ya dice "sin captura" cuando no hay nada. */}
+
+                  {/* ===== EN GENERAL: el numero grande del dia ===== */}
+                  {activos.length>0&&(function(){
+                    var t=resumen.tot,u=resumen.u;
+                    var rend=t.rec>0?Math.round(t.emp/t.rec*1000)/10:0;
+                    var mer=r2(t.rec-t.emp);
+                    return (
+                      <div style={{margin:"12px 14px 0",background:"linear-gradient(135deg,#0d2a14,#0a1f10)",
+                        border:"2px solid rgba(74,222,128,.45)",borderRadius:12,padding:"14px 16px",
+                        boxShadow:"0 4px 18px rgba(0,0,0,.45)"}}>
+                        <div style={{fontSize:11,fontWeight:900,letterSpacing:2.5,color:"#4ade80",
+                          textTransform:"uppercase",marginBottom:11}}>En general &middot; todo el dia</div>
+                        <div style={{display:"flex",alignItems:"center",gap:18,flexWrap:"wrap"}}>
+                          <Dona segs={segsDe(t,t.rec)} pct={rend} r={50} sw={24}/>
+                          <div style={{display:"flex",gap:18,flexWrap:"wrap",flex:1}}>
+                            <Cifra t={"Llego"} v={Math.round(t.rec).toLocaleString()} s={u+(t.rejas?"  ·  "+t.rejas.toLocaleString()+" rejas":"")} c="#a8e063" big={true}/>
+                            <Cifra t={"Empaco"} v={Math.round(t.emp).toLocaleString()} s={u} c="#4ade80" big={true}/>
+                            <Cifra t={"Merma"} v={Math.round(mer).toLocaleString()} s={pc(mer,t.rec)+"%"} c={mCol(pc(mer,t.rec))} big={true}/>
+                          </div>
+                        </div>
+                        <Repartos segs={segsDe(t,t.rec)} base={t.rec} u={u} big={true}/>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ===== DESGLOSE POR MALLA =====
+                       Solo se pinta el resumen de una malla cuando esa malla
+                       junta DOS O MAS ranchos. Si la malla trae un solo rancho,
+                       la tarjeta de abajo ya es el reporte de esa malla y
+                       ponerla arriba seria repetirla. */}
+                  {resumen.mallas.filter(function(m){return resumen.g[m].ranchos.length>1}).length>0&&(function(){
+                    var u=resumen.u;
+                    var mm=resumen.mallas.filter(function(m){return resumen.g[m].ranchos.length>1});
+                    return (
+                      <div style={{margin:"14px 14px 0"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:9}}>
+                          <div style={{fontSize:10,fontWeight:900,letterSpacing:2.5,color:"#38bdf8",
+                            textTransform:"uppercase"}}>Desglose por malla</div>
+                          <div style={{flex:1,height:1,background:"rgba(56,189,248,.28)"}}/>
+                          <div style={{fontSize:10,color:"#4a6a3a",fontWeight:700}}>{mm.length} malla{mm.length>1?"s":""}</div>
+                        </div>
+                        {mm.map(function(m,mi){
+                          var o=resumen.g[m];
+                          var rend=o.rec>0?Math.round(o.emp/o.rec*1000)/10:0;
+                          var mer=r2(o.rec-o.emp);
+                          var mc=RC[mi%RC.length];
+                          return (
+                            <div key={m} className="fi" style={{background:"rgba(255,255,255,.03)",
+                              border:"1px solid "+mc+"44",borderLeft:"5px solid "+mc,borderRadius:10,
+                              padding:"11px 13px",marginBottom:9}}>
+                              <div style={{display:"flex",alignItems:"baseline",gap:9,marginBottom:9,flexWrap:"wrap"}}>
+                                <div style={{fontSize:17,fontWeight:900,color:mc,letterSpacing:.3}}>
+                                  {m==="Sin malla"?"Sin malla":"Malla "+m}
+                                </div>
+                                <div style={{fontSize:10,color:"#4a6a3a"}}>{o.ranchos.join(" · ")}</div>
+                              </div>
+                              <div style={{display:"flex",alignItems:"center",gap:15,flexWrap:"wrap"}}>
+                                <Dona segs={segsDe(o,o.rec)} pct={rend} r={34} sw={17}/>
+                                <div style={{display:"flex",gap:14,flexWrap:"wrap",flex:1}}>
+                                  <Cifra t={"Llego"} v={Math.round(o.rec).toLocaleString()} s={u+(o.rejas?"  ·  "+o.rejas.toLocaleString()+" rejas":"")} c="#a8e063" min={84}/>
+                                  <Cifra t={"Empaco"} v={Math.round(o.emp).toLocaleString()} s={u} c="#4ade80" min={84}/>
+                                  <Cifra t={"Merma"} v={Math.round(mer).toLocaleString()} s={pc(mer,o.rec)+"%"} c={mCol(pc(mer,o.rec))} min={74}/>
+                                </div>
+                              </div>
+                              <Repartos segs={segsDe(o,o.rec)} base={o.rec} u={u}/>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
+                  {CULT_MALLA[cult]&&(function(){
+                    var tot={ORG:{rec:0,emp:0},CV:{rec:0,emp:0}};
+                    activos.forEach(function(k){
+                      var pk=partesLlave(k),d2=calcs[k];
+                      if(!tot[pk.tipo])return;
+                      tot[pk.tipo].rec+=d2.kgRec||0;
+                      tot[pk.tipo].emp+=d2.kgEmp||0;
+                    });
+                    var hay=(tot.ORG.rec+tot.ORG.emp+tot.CV.rec+tot.CV.emp)>0;
+                    if(!hay)return null;
+                    return (
+                      <div style={{display:"flex",gap:10,flexWrap:"wrap",padding:"0 14px 4px"}}>
+                        {["ORG","CV"].map(function(tp){
+                          var t=tot[tp];
+                          if(t.rec+t.emp===0)return null;
+                          var rend=t.rec>0?Math.round(t.emp/t.rec*1000)/10:0;
+                          return (
+                            <div key={tp} style={{flex:1,minWidth:200,background:"rgba(255,255,255,.03)",
+                              border:"1px solid "+(tp==="ORG"?"rgba(74,222,128,.3)":"rgba(96,165,250,.3)"),
+                              borderRadius:9,padding:"10px 13px"}}>
+                              <div style={{fontSize:10,fontWeight:900,letterSpacing:1,
+                                color:tp==="ORG"?"#4ade80":"#60a5fa",marginBottom:5}}>
+                                TOTAL {tp==="ORG"?"ORGANICO":"CONVENCIONAL"}
+                              </div>
+                              <div style={{display:"flex",gap:16,fontSize:11,color:"#7a9a6a"}}>
+                                <span>Llego <b style={{color:"#a8e063",fontFamily:"'DM Mono',monospace"}}>{Math.round(t.rec).toLocaleString()}</b></span>
+                                <span>Empaco <b style={{color:"#a8e063",fontFamily:"'DM Mono',monospace"}}>{Math.round(t.emp).toLocaleString()}</b></span>
+                                <span style={{marginLeft:"auto",fontSize:15,fontWeight:900,
+                                  color:tp==="ORG"?"#4ade80":"#60a5fa",fontFamily:"'DM Mono',monospace"}}>{rend}%</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                  {/* TABLA DE RENDIMIENTO POR RANCHO */}
+                  <div style={{padding:"12px 14px"}}>
+                    {activos.slice().sort(function(a,b){return calcs[b].fRend-calcs[a].fRend}).map(function(rancho,ri){
+                      var d=calcs[rancho],rc=RC[ri%RC.length];
+                      var u=d.u||"kg";
+                      var base=d.kgRec>0?d.kgRec:0;
+                      var lin=[];
+                      cals.forEach(function(cal){
+                        var _dd=d.det[cal.id]||{};
+                        var v=valCal(d,_dd);
+                        if(v>0)lin.push({l:cal.l,c:cal.c,v:v,f:cal.id});
+                      });
+                      var mermaV=base>0?r2(base-lin.reduce(function(t,x){return t+x.v},0)):0;
+                      // Con || esto valia 0 (un numero) y React pintaba un "0"
+                      // suelto debajo de cada malla. Tiene que ser si/no.
+                      var alerta=!!((d.sinPeso&&d.sinPeso.length)||(d.faltaPz&&d.faltaPz.length));
+                      return(
+                        <div key={rancho} style={{marginBottom:14,background:"rgba(255,255,255,.025)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,padding:"12px 14px"}}>
+                          <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:9,flexWrap:"wrap"}}>
+                            <div style={{fontSize:14,fontWeight:900,color:rc,letterSpacing:.3}}>{nomLlave(rancho)}</div>
+                            {(mallaLlave(rancho)||d.malla)&&<div style={{fontSize:10,fontWeight:800,color:"#0b1a0e",background:rc,borderRadius:4,padding:"1px 7px"}}>MALLA {mallaLlave(rancho)||d.malla}</div>}
+                            <div style={{fontSize:10,color:"#4a6a3a"}}>{d.rejas} rejas</div>
+                            <div style={{marginLeft:"auto",fontSize:11,color:"#7a9a6a"}}>
+                              Llegaron <b style={{color:"#a8e063",fontSize:15,fontFamily:"'DM Mono',monospace"}}>{Math.round(base).toLocaleString()}</b> {u}
+                            </div>
+                          </div>
+                          {base>0&&(function(){
+                            var segs=lin.map(function(x){return {l:x.l,c:x.c,v:x.v};});
+                            // Merma con signo: negativa cuando se empaco de mas.
+                            if(mermaV!==0)segs.push({l:"Merma",c:mermaV<0?"#fbbf24":"#ef4444",v:mermaV});
+                            // El anillo solo puede dibujar lo positivo; los
+                            // porcentajes de la lista NO salen de aqui, salen
+                            // de lo que llego (base).
+                            var tot=segs.reduce(function(t,x){return t+Math.max(0,x.v)},0)||1;
+                            var R=52,C=2*Math.PI*R,off=0;
+                            return (
+                              <div style={{display:"flex",alignItems:"center",gap:20,margin:"4px 0 14px",flexWrap:"wrap"}}>
+                                <svg width="150" height="150" viewBox="0 0 150 150" style={{flex:"none"}}>
+                                  <defs>
+                                    <filter id={"gl"+ri} x="-50%" y="-50%" width="200%" height="200%">
+                                      <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#000" floodOpacity="0.55"/>
+                                    </filter>
+                                    <radialGradient id={"br"+ri} cx="38%" cy="30%">
+                                      <stop offset="0%" stopColor="#fff" stopOpacity="0.22"/>
+                                      <stop offset="65%" stopColor="#fff" stopOpacity="0"/>
+                                    </radialGradient>
+                                  </defs>
+                                  <circle cx="75" cy="75" r={R} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="26"/>
+                                  <g filter={"url(#gl"+ri+")"}>
+                                    {segs.map(function(x,i){
+                                      var dash=C*(Math.max(0,x.v)/tot);
+                                      var el=(<circle key={i} cx="75" cy="75" r={R} fill="none" stroke={x.c}
+                                        strokeWidth="26" strokeDasharray={dash+" "+(C-dash)}
+                                        strokeDashoffset={-off} transform="rotate(-90 75 75)"/>);
+                                      off+=dash;return el;
+                                    })}
+                                  </g>
+                                  <circle cx="75" cy="75" r={R+13} fill={"url(#br"+ri+")"} pointerEvents="none"/>
+                                  <circle cx="75" cy="75" r={R-13} fill="#0a1410"/>
+                                  <text x="75" y="72" textAnchor="middle" fontSize="24" fontWeight="900"
+                                    fill="#a8e063" fontFamily="Georgia,serif">{d.fRend}%</text>
+                                  <text x="75" y="88" textAnchor="middle" fontSize="8" fill="#4a6a3a"
+                                    letterSpacing="1.5">RENDIMIENTO</text>
+                                </svg>
+                                <div style={{flex:1,minWidth:150}}>
+                                  {segs.map(function(x,i){
+                                    // SIEMPRE sobre lo que llego, nunca sobre
+                                    // lo empacado: 500 de 1000 son 50%.
+                                    var pc3=base>0?Math.round(x.v/base*1000)/10:0;
+                                    var anc=Math.max(0,Math.min(100,pc3));
+                                    return (
+                                      <div key={i} style={{marginBottom:7}}>
+                                        <div style={{display:"flex",alignItems:"center",gap:7,fontSize:11,marginBottom:3}}>
+                                          <span style={{width:9,height:9,borderRadius:3,background:x.c,display:"inline-block",boxShadow:"0 1px 3px rgba(0,0,0,.5)"}}/>
+                                          <span style={{color:"#9ab88a",fontWeight:700}}>{x.l}</span>
+                                          <span style={{marginLeft:"auto",color:x.c,fontWeight:900,fontFamily:"'DM Mono',monospace"}}>{pc3}%</span>
+                                        </div>
+                                        <div style={{height:5,borderRadius:3,background:"rgba(255,255,255,.06)",overflow:"hidden"}}>
+                                          <div style={{width:anc+"%",height:"100%",background:x.c,borderRadius:3}}/>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                          {base<=0
+                            ? <div style={{fontSize:11,color:"#fbbf24"}}>Falta capturar el peso por reja de este rancho.</div>
+                            : <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                                <thead><tr style={{fontSize:9,color:"#4a7a1e",textAlign:"left"}}>
+                                  <th style={{padding:"4px 6px"}}>CALIDAD</th>
+                                  <th style={{textAlign:"right"}}>{u.toUpperCase()}</th>
+                                  <th style={{textAlign:"right"}}>%</th>
+                                  <th style={{textAlign:"right"}}>CAJAS</th>
+                                  <th style={{textAlign:"right"}}>FACTOR</th>
+                                </tr></thead>
+                                <tbody>
+                                  {lin.map(function(x,i){
+                                    var pc2=Math.round(x.v/base*1000)/10;
+                                    var cr=cajaRef(cult,x.f);
+                                    var cjs=cr.f>0?x.v/cr.f:0;
+                                    var fac=d.rejas>0?cjs/d.rejas:0;
+                                    return(
+                                      <tr key={i} style={{borderTop:"1px solid rgba(255,255,255,.06)"}}>
+                                        <td style={{padding:"5px 6px",color:x.c,fontWeight:800}}>{x.l}</td>
+                                        <td style={{textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#e5e7eb",fontWeight:800}}>{Math.round(x.v).toLocaleString()}</td>
+                                        <td style={{textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#9ab88a"}}>{pc2}%</td>
+                                        <td style={{textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#cbd5e1"}}>{Math.round(cjs).toLocaleString()}</td>
+                                        <td style={{textAlign:"right",fontFamily:"'DM Mono',monospace",color:x.c,fontWeight:900}}>F{x.f==="a"?"1":x.f==="b"?"2":"3"} {fac.toFixed(3)}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                  <tr style={{borderTop:"2px solid rgba(239,68,68,.3)"}}>
+                                    <td style={{padding:"5px 6px",color:"#ef4444",fontWeight:800}}>Merma</td>
+                                    <td style={{textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#ef4444",fontWeight:800}}>{Math.round(mermaV).toLocaleString()}</td>
+                                    <td style={{textAlign:"right",fontFamily:"'DM Mono',monospace",color:mCol(base>0?mermaV/base*100:0)}}>{base>0?Math.round(mermaV/base*1000)/10:0}%</td>
+                                    <td style={{textAlign:"right",color:"#374151"}}>-</td>
+                                    <td style={{textAlign:"right",color:"#374151"}}>-</td>
+                                  </tr>
+                                  <tr style={{borderTop:"1px solid rgba(255,255,255,.12)"}}>
+                                    <td style={{padding:"5px 6px",color:"#a8e063",fontWeight:900}}>Empacado</td>
+                                    <td style={{textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#a8e063",fontWeight:900}}>{Math.round(d.kgEmp).toLocaleString()}</td>
+                                    <td style={{textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#a8e063",fontWeight:900}}>{d.fRend}%</td>
+                                    <td style={{textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#a8e063",fontWeight:900}}>
+                                      {(function(){var cr=cajaRef(cult,"a");return cr.f>0?Math.round(d.kgEmp/cr.f).toLocaleString():"-";})()}
+                                    </td>
+                                    <td style={{textAlign:"right",fontFamily:"'DM Mono',monospace",color:"#a8e063",fontWeight:900}}>
+                                      {(function(){var cr=cajaRef(cult,"a");return (d.rejas>0&&cr.f>0)?(d.kgEmp/cr.f/d.rejas).toFixed(3):"-";})()}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>}
+                          {alerta&&(
+                            <div style={{marginTop:8,background:"rgba(239,68,68,.08)",border:"1px solid rgba(239,68,68,.3)",borderRadius:7,padding:"7px 10px",fontSize:10,color:"#fca5a5",lineHeight:1.5}}>
+                              {d.sinPeso&&d.sinPeso.length>0&&<div><b>Sin peso configurado:</b> {d.sinPeso.join(", ")}. Esos kilos entran como cero.</div>}
+                              {d.faltaPz&&d.faltaPz.length>0&&<div>Falta piezas por reja para: {d.faltaPz.join(", ")}.</div>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{padding:"5px 9px",display:"flex",gap:7,flexWrap:"wrap",borderTop:"1px solid rgba(255,255,255,.06)",background:"rgba(0,0,0,.3)"}}>
+                    {cals.map(function(cal){return <span key={cal.id} style={{display:"flex",alignItems:"center",gap:3,fontSize:8,color:cal.c,fontWeight:700}}><span style={{width:6,height:6,borderRadius:1,background:cal.c,display:"inline-block"}}/>{cal.l}</span>})}
+                    <span style={{display:"flex",alignItems:"center",gap:3,fontSize:8,color:"#ef4444",fontWeight:700}}><span style={{width:6,height:6,borderRadius:1,background:"#ef4444",display:"inline-block"}}/>Merma</span>
+                    <span style={{fontSize:8,color:"#3a4a2a",marginLeft:"auto"}}>F=cajas 20lb/reja</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===== TAB EVOLUCIÓN ===== */}
+      {tab==="his"&&(function(){
+        /* HISTORIAL: los dias que ya se guardaron, congelados. Sirve para
+           consultar dias pasados, porque produccion no guarda el inventario de
+           ese dia: se mueve en cuanto embarcan. Lo mas resumido posible. */
+        var dias=Object.keys(hist||{}).sort().reverse();
+        var dk=hDia||dias[0]||"";
+        var dd=(hist||{})[dk]||{};
+        var fLargo=dk?(dk.slice(6,8)+"/"+dk.slice(4,6)+"/"+dk.slice(0,4)):"";
+        return (
+          <div style={{padding:"11px 11px 40px"}}>
+            {dias.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:"#6a7a5a",fontSize:13}}>
+              Todavia no hay dias guardados. En Captura, cuando el dia ya este bien, dale <b>Guardar dia</b>.</div>}
+            {dias.length>0&&(
+              <div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:11}}>
+                  {dias.slice(0,21).map(function(k){
+                    var on=(k===dk);
+                    return <button key={k} onClick={function(){setHDia(k)}}
+                      style={{padding:"4px 9px",borderRadius:6,fontSize:11,fontWeight:800,cursor:"pointer",
+                        border:"1px solid "+(on?"rgba(74,222,128,.5)":"rgba(255,255,255,.1)"),
+                        background:on?"rgba(74,222,128,.1)":"transparent",color:on?"#4ade80":"#8a9a7a"}}>
+                      {k.slice(6,8)+"/"+k.slice(4,6)}</button>;
+                  })}
+                </div>
+                <div id="hisdia" style={{background:"#07100a",border:"1px solid #2d4a2d",borderRadius:10,padding:"11px 12px"}}>
+                  <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:9,flexWrap:"wrap"}}>
+                    <div style={{fontSize:16,fontWeight:900,color:"#7ee08f"}}>Dia {fLargo}</div>
+                    <div style={{flex:1}}/>
+                    <button data-nofoto="1" onClick={function(){foto("hisdia","dia-"+dk)}}
+                      style={{padding:"4px 10px",borderRadius:6,border:"1px solid rgba(255,255,255,.15)",
+                        background:"transparent",color:"#c0d0a0",fontSize:11,fontWeight:800,cursor:"pointer"}}>Compartir</button>
+                  </div>
+                  {Object.keys(dd).length===0&&<div style={{color:"#6a7a5a",fontSize:12}}>Ese dia no trae nada guardado.</div>}
+                  {Object.keys(dd).sort().map(function(cu){
+                    var g=dd[cu]||{};
+                    if(!g.rep)return null;
+                    return (
+                      <div key={"rep"+cu} style={{marginBottom:12}}>
+                        <div style={{fontSize:13,fontWeight:900,color:"#cfe8d4",marginBottom:6}}>
+                          {cu} · reporte completo de ese dia</div>
+                        <div dangerouslySetInnerHTML={{__html:g.rep}}/>
+                      </div>
+                    );
+                  })}
+                  {Object.keys(dd).sort().map(function(cu){
+                    var g=dd[cu]||{},rs=g.ranchos||{};
+                    var tRej=0,tRec=0,tEmp=0,u="";
+                    Object.keys(rs).forEach(function(k){var x=rs[k]||{};
+                      tRej+=ni(x.rejas);tRec+=nf(x.kgRec);tEmp+=nf(x.kgEmp);u=x.u||u;});
+                    var rend=tRec>0?Math.round(tEmp/tRec*1000)/10:0;
+                    return (
+                      <div key={cu} style={{border:"1px solid rgba(255,255,255,.1)",borderRadius:8,
+                        padding:"8px 10px",marginBottom:8}}>
+                        <div style={{display:"flex",gap:10,alignItems:"baseline",flexWrap:"wrap",marginBottom:4}}>
+                          <div style={{fontSize:14,fontWeight:900,color:"#cfe8d4"}}>{cu}</div>
+                          <div style={{flex:1}}/>
+                          <div style={{fontSize:12,color:"#8fb0c9"}}>{ni(tRej).toLocaleString()} rejas</div>
+                          <div style={{fontSize:12,color:"#e6edf3"}}>{Math.round(tRec).toLocaleString()} {u} llegaron</div>
+                          <div style={{fontSize:12,color:"#e6edf3"}}>{Math.round(tEmp).toLocaleString()} empacados</div>
+                          <div style={{fontSize:13,fontWeight:900,color:rend>=88?"#4ade80":(rend>=80?"#fbbf24":"#f87171")}}>
+                            {rend}% de rendimiento</div>
+                        </div>
+                        {Object.keys(rs).sort().map(function(k){
+                          var x=rs[k]||{};
+                          return <div key={k} style={{fontSize:11.5,color:"#9fb8a4",padding:"1px 0"}}>
+                            &middot; {nomLlave(k)}{mallaLlave(k)?" M"+mallaLlave(k):""} — {ni(x.rejas).toLocaleString()} rejas — {Math.round(nf(x.kgRec)).toLocaleString()} {x.u} — empacaron {Math.round(nf(x.kgEmp)).toLocaleString()} — merma {x.pctM}%
+                          </div>;
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {tab==="evo"&&(
+        <div style={{padding:"11px 11px 40px"}}>
+          {diasH.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:"#2a3a2a",fontSize:13}}>Sin historial. Guarda los rendimientos desde Captura.</div>}
+          {diasH.length>0&&(
+            <div>
+              <div style={{fontSize:9,color:"#4a6a3a",fontWeight:700,letterSpacing:2,textTransform:"uppercase",marginBottom:11}}>{cult} · últimos {diasH.length} días</div>
+              {(function(){
+                var rH=[];diasH.forEach(function(d){Object.keys(d.ranchos||{}).forEach(function(r){if(rH.indexOf(r)<0)rH.push(r)})});
+                return rH.map(function(rancho,ri){
+                  var rc=RC[ri%RC.length];
+                  var datos=diasH.map(function(d){var rd=d.ranchos[rancho];if(!rd)return null;return{fec:d.fec.slice(5),pctM:rd.pctM||0}}).filter(Boolean).reverse();
+                  if(!datos.length)return null;
+                  var W=300,H=80,PAD=10;
+                  var maxM=Math.max.apply(null,datos.map(function(x){return x.pctM}))||1;
+                  var minM=Math.max(0,Math.min.apply(null,datos.map(function(x){return x.pctM}))-5);
+                  var rng=Math.max(maxM-minM,5);
+                  var xSt=datos.length>1?(W-PAD*2)/(datos.length-1):W-PAD*2;
+                  var yP=function(v){return PAD+(1-(v-minM)/rng)*(H-PAD*2)};
+                  var pts=datos.map(function(x,i){return[(PAD+i*xSt).toFixed(1),yP(x.pctM).toFixed(1)]});
+                  var poly=pts.map(function(p){return p[0]+","+p[1]}).join(" ");
+                  var area="M "+pts[0][0]+","+(H-2)+" L "+poly+" L "+pts[pts.length-1][0]+","+(H-2)+" Z";
+                  var last=datos[datos.length-1],prev=datos.length>1?datos[datos.length-2]:null;
+                  return(
+                    <div key={rancho} style={{background:"rgba(255,255,255,.02)",border:"1px solid "+rc+"33",borderLeft:"3px solid "+rc,borderRadius:8,padding:"10px",marginBottom:8}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                        <span style={{fontSize:12,fontWeight:800,color:rc}}>{rancho}</span>
+                        <span style={{fontSize:9,color:"#3a5a3a"}}>merma % · {datos.length} días</span>
+                        <div style={{flex:1}}/>
+                        <span style={{fontSize:12,color:mCol(last.pctM),fontWeight:700,fontFamily:"'DM Mono',monospace"}}>Hoy: {last.pctM}%</span>
+                        {prev&&<span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,background:last.pctM<prev.pctM?"rgba(74,222,128,.1)":"rgba(239,68,68,.1)",color:last.pctM<prev.pctM?"#4ade80":"#ef4444"}}>{last.pctM<prev.pctM?"▼":"▲"} {Math.abs(last.pctM-prev.pctM).toFixed(1)}%</span>}
+                      </div>
+                      <svg width="100%" viewBox={"0 0 "+W+" "+H} style={{overflow:"visible"}}>
+                        <defs><linearGradient id={"g"+ri} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={rc} stopOpacity=".15"/><stop offset="100%" stopColor={rc} stopOpacity=".02"/></linearGradient></defs>
+                        <path d={area} fill={"url(#g"+ri+")"}/>
+                        {minM<12&&12<maxM&&<g><line x1={PAD} y1={yP(12)} x2={W-PAD} y2={yP(12)} stroke="rgba(251,146,60,.35)" strokeWidth="1" strokeDasharray="4,3"/><text x={W-PAD+3} y={yP(12)+3} fontSize="7" fill="rgba(251,146,60,.7)" fontWeight="700">12%</text></g>}
+                        <polyline points={poly} fill="none" stroke={rc} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round"/>
+                        {pts.map(function(p,i){var col=mCol(datos[i].pctM);return(
+                          <g key={i}>
+                            <circle cx={p[0]} cy={p[1]} r="5" fill="#07100a" stroke={col} strokeWidth="2"/>
+                            <circle cx={p[0]} cy={p[1]} r="2.5" fill={col}/>
+                            <text x={p[0]} y={parseFloat(p[1])-8} textAnchor="middle" fontSize="8" fill={col} fontWeight="700">{datos[i].pctM}%</text>
+                            <text x={p[0]} y={H+3} textAnchor="middle" fontSize="7" fill="#2a4a2a">{datos[i].fec}</text>
+                          </g>
+                        )})}
+                      </svg>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+ReactDOM.render(<App/>,document.getElementById("root"));
+</script>
+</body>
+</html>
